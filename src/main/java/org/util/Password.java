@@ -1,4 +1,4 @@
-package util;
+package org.util;
 
 import org.mindrot.jbcrypt.BCrypt;
 

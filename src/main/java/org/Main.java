@@ -1,6 +1,8 @@
-import util.DatabaseConnection;
-import service.AuthenticationService;
-import ui.LoginFrame;
+package org;
+
+import org.util.DatabaseConnection;
+import org.service.AuthenticationService;
+import org.ui.LoginFrame;
 
 import javax.swing.*;
 import java.sql.Connection;

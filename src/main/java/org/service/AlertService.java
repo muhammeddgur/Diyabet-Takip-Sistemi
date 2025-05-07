@@ -1,7 +1,7 @@
-package service;
+package org.service;
 
-import dao.AlertDao;
-import model.Alert;
+import org.dao.AlertDao;
+import org.model.Alert;
 import java.time.LocalDateTime;
 import java.sql.Connection;
 

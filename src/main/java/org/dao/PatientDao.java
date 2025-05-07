@@ -1,8 +1,8 @@
-package dao;
+package org.dao;
 
-import model.Patient;
-import model.User;
-import model.Doctor;
+import org.model.Patient;
+import org.model.User;
+import org.model.Doctor;
 import java.sql.*;
 import java.time.LocalDate;
 

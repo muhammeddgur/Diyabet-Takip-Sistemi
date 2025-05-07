@@ -1,7 +1,7 @@
-package dao;
+package org.dao;
 
-import model.User;
-import util.Password;
+import org.model.User;
+import org.util.Password;
 import java.sql.*;
 
 public class UserDao {

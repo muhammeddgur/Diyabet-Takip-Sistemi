@@ -1,7 +1,7 @@
-package service;
+package org.service;
 
-import dao.MeasurementDao;
-import model.BloodSugarMeasurement;
+import org.dao.MeasurementDao;
+import org.model.BloodSugarMeasurement;
 import java.time.LocalDateTime;
 import java.sql.Connection;
 

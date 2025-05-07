@@ -1,6 +1,6 @@
-package dao;
+package org.dao;
 
-import model.Alert;
+import org.model.Alert;
 import java.sql.*;
 import java.time.LocalDateTime;
 

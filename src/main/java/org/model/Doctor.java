@@ -1,4 +1,4 @@
-package model;
+package org.model;
 
 public class Doctor {
     private int id;

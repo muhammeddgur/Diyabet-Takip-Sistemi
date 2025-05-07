@@ -1,7 +1,7 @@
-package ui;
+package org.ui;
 
-import service.AuthenticationService;
-import model.User;
+import org.service.AuthenticationService;
+import org.model.User;
 
 import javax.swing.*;
 import java.awt.event.*;

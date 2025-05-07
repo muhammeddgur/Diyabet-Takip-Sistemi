@@ -1,7 +1,7 @@
-package dao;
+package org.dao;
 
-import model.BloodSugarMeasurement;
-import model.Patient;
+import org.model.BloodSugarMeasurement;
+import org.model.Patient;
 import java.sql.*;
 import java.time.LocalDateTime;
 

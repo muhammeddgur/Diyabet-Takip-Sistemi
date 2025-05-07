@@ -1,6 +1,6 @@
-package ui;
+package org.ui;
 
-import model.User;
+import org.model.User;
 import javax.swing.*;
 
 public class DoctorDashboard extends JFrame{

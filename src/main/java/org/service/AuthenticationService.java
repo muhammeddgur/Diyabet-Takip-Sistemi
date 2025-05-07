@@ -1,7 +1,7 @@
-package service;
+package org.service;
 
-import dao.UserDao;
-import model.User;
+import org.dao.UserDao;
+import org.model.User;
 import java.sql.Connection;
 
 public class AuthenticationService {

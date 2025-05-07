@@ -1,7 +1,7 @@
-package dao;
+package org.dao;
 
-import model.Doctor;
-import model.User;
+import org.model.Doctor;
+import org.model.User;
 import java.sql.*;
 
 public class DoctorDao {
