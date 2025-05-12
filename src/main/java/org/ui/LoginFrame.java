@@ -33,8 +33,16 @@ public class LoginFrame extends JFrame {
     }
 
     private void onLogin() {
-        String tc = tcField.getText();
+        String tc = tcField.getText().trim(); // Boşlukları temizle
         String pwd = new String(passField.getPassword());
+        System.out.println("Login: TC=" + tc + ", PWD uzunluk=" + pwd.length());
+
+        // Şifre kontrolü
+        if (pwd.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Şifre boş olamaz!");
+            return;
+        }
+
         User user = authService.authenticate(tc, pwd);
         if (user != null) {
             JOptionPane.showMessageDialog(this, "Hoşgeldiniz, " + user.getRole());
