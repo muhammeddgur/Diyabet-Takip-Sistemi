@@ -1,356 +1,239 @@
 package org.dao;
 
 import org.model.User;
-import org.util.DatabaseConnection;
-import org.util.Password;
-
 import java.sql.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-05-14 15:45:49
- * Current User's Login: Emirhan-Karabulut
- *
- * User tablosu için veritabanı işlemlerini yöneten DAO sınıfı
+ * UserDao arayüzünün implementasyonu.
  */
-public class UserDao {
-    private static final Logger LOGGER = Logger.getLogger(UserDao.class.getName());
+public class UserDao implements IUserDao {
 
-    /**
-     * Yeni bir kullanıcı ekler
-     *
-     * @param user Eklenecek kullanıcı nesnesi
-     * @return Eklenen kullanıcının ID'si, başarısızsa null
-     * @throws SQLException SQL hatası durumunda
-     */
-    public Integer save(User user) throws SQLException {
-        // SQL sorgusu - users tablosuna veri ekleme
-        String sql = "INSERT INTO users (tc_identity, first_name, last_name, password, email, " +
-                "birth_date, gender, user_type, profile_photo) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    private final DatabaseConnectionManager connectionManager;
 
-        Connection conn = null;
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            // Bağlantı al
-            conn = DatabaseConnection.getConnection();
-
-            // Şifreyi hashle (güvenlik için)
-            String hashedPassword = Password.hashPassword(user.getPassword());
-
-            // PreparedStatement oluştur ve parametreleri ayarla
-            stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-            stmt.setString(1, user.getTcIdentity());
-            stmt.setString(2, user.getFirstName());
-            stmt.setString(3, user.getLastName());
-            stmt.setString(4, hashedPassword);
-            stmt.setString(5, user.getEmail());
-
-            // Doğum tarihi null olabilir
-            if (user.getBirthDate() != null) {
-                stmt.setDate(6, Date.valueOf(user.getBirthDate()));
-            } else {
-                stmt.setNull(6, Types.DATE);
-            }
-
-            stmt.setString(7, user.getGender());
-            stmt.setString(8, user.getUserType());
-
-            // Profil fotoğrafı null olabilir
-            if (user.getProfilePhoto() != null) {
-                stmt.setBytes(9, user.getProfilePhoto());
-            } else {
-                stmt.setNull(9, Types.BINARY);
-            }
-
-            // Sorguyu çalıştır
-            int affectedRows = stmt.executeUpdate();
-
-            if (affectedRows == 0) {
-                throw new SQLException("Kullanıcı oluşturma başarısız, hiç satır etkilenmedi.");
-            }
-
-            // Oluşturulan ID'yi al
-            rs = stmt.getGeneratedKeys();
-            if (rs.next()) {
-                return rs.getInt(1);
-            } else {
-                throw new SQLException("Kullanıcı oluşturma başarısız, ID alınamadı.");
-            }
-
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Kullanıcı kaydedilirken hata oluştu", e);
-            throw e;
-        } finally {
-            // Kaynakları temizle
-            if (rs != null) try { rs.close(); } catch (SQLException e) { /* ignore */ }
-            if (stmt != null) try { stmt.close(); } catch (SQLException e) { /* ignore */ }
-            if (conn != null) try { conn.close(); } catch (SQLException e) { /* ignore */ }
-        }
+    public UserDao() {
+        connectionManager = DatabaseConnectionManager.getInstance();
     }
 
-    /**
-     * Kullanıcı bilgilerini günceller
-     *
-     * @param user Güncellenecek kullanıcı nesnesi
-     * @throws SQLException SQL hatası durumunda
-     */
-    public void update(User user) throws SQLException {
-        String sql = "UPDATE users SET first_name = ?, last_name = ?, email = ?, " +
-                "birth_date = ?, gender = ?, profile_photo = ? WHERE user_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, user.getFirstName());
-            stmt.setString(2, user.getLastName());
-            stmt.setString(3, user.getEmail());
-
-            if (user.getBirthDate() != null) {
-                stmt.setDate(4, Date.valueOf(user.getBirthDate()));
-            } else {
-                stmt.setNull(4, Types.DATE);
-            }
-
-            stmt.setString(5, user.getGender());
-
-            if (user.getProfilePhoto() != null) {
-                stmt.setBytes(6, user.getProfilePhoto());
-            } else {
-                stmt.setNull(6, Types.BINARY);
-            }
-
-            stmt.setInt(7, user.getUserId());
-
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Kullanıcı güncellenirken hata oluştu", e);
-            throw e;
-        }
-    }
-
-    /**
-     * Kullanıcının şifresini değiştirir
-     *
-     * @param userId Kullanıcı ID
-     * @param newPassword Yeni şifre
-     * @throws SQLException SQL hatası durumunda
-     */
-    public void changePassword(Integer userId, String newPassword) throws SQLException {
-        String sql = "UPDATE users SET password = ? WHERE user_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            // Yeni şifreyi hashle
-            String hashedPassword = Password.hashPassword(newPassword);
-
-            stmt.setString(1, hashedPassword);
-            stmt.setInt(2, userId);
-
-            stmt.executeUpdate();
-            LOGGER.info("Kullanıcı şifresi başarıyla değiştirildi. UserId: " + userId);
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Şifre değiştirilirken hata oluştu", e);
-            throw e;
-        }
-    }
-
-    /**
-     * ID'ye göre kullanıcı arar
-     *
-     * @param userId Kullanıcı ID
-     * @return Kullanıcı nesnesi, bulunamazsa null
-     * @throws SQLException SQL hatası durumunda
-     */
-    public User findById(Integer userId) throws SQLException {
+    @Override
+    public User findById(Integer id) throws SQLException {
         String sql = "SELECT * FROM users WHERE user_id = ?";
+        User user = null;
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, userId);
+            stmt.setInt(1, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return mapResultSetToUser(rs);
+                    user = mapResultSetToUser(rs);
                 }
             }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "ID'ye göre kullanıcı bulunurken hata oluştu", e);
-            throw e;
         }
 
-        return null;
+        return user;
     }
 
-    /**
-     * TC kimlik numarasına göre kullanıcı arar
-     *
-     * @param tcIdentity TC kimlik numarası
-     * @return Kullanıcı nesnesi, bulunamazsa null
-     * @throws SQLException SQL hatası durumunda
-     */
-    public User findByTcIdentity(String tcIdentity) throws SQLException {
-        String sql = "SELECT * FROM users WHERE tc_identity = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, tcIdentity);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapResultSetToUser(rs);
-                }
-            }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "TC kimlik numarasına göre kullanıcı bulunurken hata oluştu", e);
-            throw e;
-        }
-
-        return null;
-    }
-
-    /**
-     * E-posta adresine göre kullanıcı arar
-     *
-     * @param email E-posta adresi
-     * @return Kullanıcı nesnesi, bulunamazsa null
-     * @throws SQLException SQL hatası durumunda
-     */
-    public User findByEmail(String email) throws SQLException {
-        String sql = "SELECT * FROM users WHERE email = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, email);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapResultSetToUser(rs);
-                }
-            }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "E-posta adresine göre kullanıcı bulunurken hata oluştu", e);
-            throw e;
-        }
-
-        return null;
-    }
-
-    /**
-     * Tüm kullanıcıları listeler
-     *
-     * @return Kullanıcı listesi
-     * @throws SQLException SQL hatası durumunda
-     */
+    @Override
     public List<User> findAll() throws SQLException {
         String sql = "SELECT * FROM users";
         List<User> users = new ArrayList<>();
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
                 users.add(mapResultSetToUser(rs));
             }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Tüm kullanıcılar listelenirken hata oluştu", e);
-            throw e;
         }
 
         return users;
     }
 
-    /**
-     * Kullanıcı tipine göre kullanıcıları listeler
-     *
-     * @param userType Kullanıcı tipi (DOCTOR, PATIENT)
-     * @return Kullanıcı listesi
-     * @throws SQLException SQL hatası durumunda
-     */
-    public List<User> findByUserType(String userType) throws SQLException {
-        String sql = "SELECT * FROM users WHERE user_type = ?";
-        List<User> users = new ArrayList<>();
+    @Override
+    public boolean save(User user) throws SQLException {
+        // Temel null kontrolü
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null");
+        }
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        // TC kimlik ve email kontrolü
+        if (user.getTc_kimlik() == null || user.getTc_kimlik().isEmpty() ||
+                user.getEmail() == null || user.getEmail().isEmpty()) {
+            throw new IllegalArgumentException("TC kimlik ve email zorunludur");
+        }
 
-            stmt.setString(1, userType);
+        if (user.getUser_id() == null) {
+            // Insert
+            String sql = "INSERT INTO users (tc_kimlik, password, email, ad, soyad, dogum_tarihi, cinsiyet, " +
+                    "profil_resmi, kullanici_tipi, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING user_id";
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    users.add(mapResultSetToUser(rs));
+            try (Connection conn = connectionManager.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setString(1, user.getTc_kimlik());
+                stmt.setString(2, user.getPassword());
+                stmt.setString(3, user.getEmail());
+                stmt.setString(4, user.getAd());
+                stmt.setString(5, user.getSoyad());
+                stmt.setDate(6, java.sql.Date.valueOf(user.getDogum_tarihi()));
+                stmt.setString(7, String.valueOf(user.getCinsiyet()));
+                stmt.setBytes(8, user.getProfil_resmi());
+                stmt.setString(9, user.getKullanici_tipi());
+                stmt.setTimestamp(10, Timestamp.valueOf(user.getCreated_at() != null ? user.getCreated_at() : LocalDateTime.now()));
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        user.setUser_id(rs.getInt(1));
+                        return true;
+                    }
                 }
             }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Kullanıcı tipine göre listeleme hatası", e);
-            throw e;
+        } else {
+            // Update
+            String sql = "UPDATE users SET tc_kimlik = ?, password = ?, email = ?, ad = ?, soyad = ?, " +
+                    "dogum_tarihi = ?, cinsiyet = ?, profil_resmi = ?, kullanici_tipi = ? WHERE user_id = ?";
+
+            try (Connection conn = connectionManager.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setString(1, user.getTc_kimlik());
+                stmt.setString(2, user.getPassword());
+                stmt.setString(3, user.getEmail());
+                stmt.setString(4, user.getAd());
+                stmt.setString(5, user.getSoyad());
+                stmt.setDate(6, java.sql.Date.valueOf(user.getDogum_tarihi()));
+                stmt.setString(7, String.valueOf(user.getCinsiyet()));
+                stmt.setBytes(8, user.getProfil_resmi());
+                stmt.setString(9, user.getKullanici_tipi());
+                stmt.setInt(10, user.getUser_id());
+
+                int affectedRows = stmt.executeUpdate();
+                return affectedRows > 0;
+            }
         }
 
-        return users;
+        return false;
     }
 
-    /**
-     * Kullanıcıyı siler
-     *
-     * @param userId Silinecek kullanıcının ID'si
-     * @throws SQLException SQL hatası durumunda
-     */
-    public void delete(Integer userId) throws SQLException {
+    @Override
+    public boolean delete(Integer id) throws SQLException {
         String sql = "DELETE FROM users WHERE user_id = ?";
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, userId);
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Kullanıcı silinirken hata oluştu", e);
-            throw e;
+            stmt.setInt(1, id);
+
+            int affectedRows = stmt.executeUpdate();
+            return affectedRows > 0;
         }
     }
 
-    /**
-     * ResultSet'ten User nesnesine dönüşüm yapar
-     *
-     * @param rs ResultSet
-     * @return User nesnesi
-     * @throws SQLException SQL hatası durumunda
-     */
-    private User mapResultSetToUser(ResultSet rs) throws SQLException {
-        User user = new User();
+    @Override
+    public User findByTcKimlik(String tcKimlik) throws SQLException {
+        String sql = "SELECT * FROM users WHERE tc_kimlik = ?";
+        User user = null;
 
-        user.setUserId(rs.getInt("user_id"));
-        user.setTcIdentity(rs.getString("tc_identity"));
-        user.setFirstName(rs.getString("first_name"));
-        user.setLastName(rs.getString("last_name"));
-        user.setPassword(rs.getString("password"));
-        user.setEmail(rs.getString("email"));
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-        // Date null olabilir
-        Date birthDate = rs.getDate("birth_date");
-        if (birthDate != null) {
-            user.setBirthDate(birthDate.toLocalDate());
+            stmt.setString(1, tcKimlik);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    user = mapResultSetToUser(rs);
+                }
+            }
         }
 
-        user.setGender(rs.getString("gender"));
-        user.setUserType(rs.getString("user_type"));
-        user.setProfilePhoto(rs.getBytes("profile_photo"));
+        return user;
+    }
 
-        // Timestamp'ler
+    @Override
+    public User findByEmail(String email) throws SQLException {
+        String sql = "SELECT * FROM users WHERE email = ?";
+        User user = null;
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, email);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    user = mapResultSetToUser(rs);
+                }
+            }
+        }
+
+        return user;
+    }
+
+    @Override
+    public User authenticate(String tcKimlik, String password) throws SQLException {
+        String sql = "SELECT * FROM users WHERE tc_kimlik = ? AND password = ?";
+        User user = null;
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, tcKimlik);
+            stmt.setString(2, password); // Normalde şifre hash'lenmiş olarak karşılaştırılmalıdır
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    user = mapResultSetToUser(rs);
+                    updateLastLogin(user.getUser_id());
+                }
+            }
+        }
+
+        return user;
+    }
+
+    @Override
+    public boolean updateLastLogin(Integer userId) throws SQLException {
+        String sql = "UPDATE users SET last_login = ? WHERE user_id = ?";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+            stmt.setInt(2, userId);
+
+            int affectedRows = stmt.executeUpdate();
+            return affectedRows > 0;
+        }
+    }
+
+    // ResultSet'ten User nesnesine dönüştürme yardımcı metodu
+    private User mapResultSetToUser(ResultSet rs) throws SQLException {
+        User user = new User();
+        user.setUser_id(rs.getInt("user_id"));
+        user.setTc_kimlik(rs.getString("tc_kimlik"));
+        user.setPassword(rs.getString("password"));
+        user.setEmail(rs.getString("email"));
+        user.setAd(rs.getString("ad"));
+        user.setSoyad(rs.getString("soyad"));
+        user.setDogum_tarihi(rs.getDate("dogum_tarihi").toLocalDate());
+        user.setCinsiyet(rs.getString("cinsiyet").charAt(0));
+        user.setProfil_resmi(rs.getBytes("profil_resmi"));
+        user.setKullanici_tipi(rs.getString("kullanici_tipi"));
+
         Timestamp createdAt = rs.getTimestamp("created_at");
         if (createdAt != null) {
-            user.setCreatedAt(createdAt.toLocalDateTime());
+            user.setCreated_at(createdAt.toLocalDateTime());
+        }
+
+        Timestamp lastLogin = rs.getTimestamp("last_login");
+        if (lastLogin != null) {
+            user.setLast_login(lastLogin.toLocalDateTime());
         }
 
         return user;

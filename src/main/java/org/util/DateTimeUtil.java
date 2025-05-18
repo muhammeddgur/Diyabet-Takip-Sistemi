@@ -1,19 +1,23 @@
 package org.util;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.List;
 
-public class DateTime {
+public class DateTimeUtil {
     private static final ZoneId ISTANBUL_ZONE = ZoneId.of("Europe/Istanbul");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
 
-    private DateTime() {
-        // Private constructor to prevent instantiation
+    // Örnekleme önlemek için private constructor - düzeltildi
+    private DateTimeUtil() {
     }
 
     public static LocalDate getCurrentDate() {
@@ -75,5 +79,64 @@ public class DateTime {
 
     public static boolean isValidMeasurementTime(LocalTime time) {
         return !getMeasurementPeriod(time).equals("OTHER");
+    }
+
+    /**
+     * Mevcut haftanın tarihlerini döndürür (Pazartesi-Pazar)
+     *
+     * @return Haftanın tüm günlerinin tarih listesi
+     */
+    public static List<LocalDate> getCurrentWeekDates() {
+        LocalDate today = getCurrentDate();
+        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+
+        List<LocalDate> weekDates = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            weekDates.add(monday.plusDays(i));
+        }
+
+        return weekDates;
+    }
+
+    /**
+     * Belirtilen ayın ilk ve son günlerini içeren iki elemanlı bir liste döndürür
+     *
+     * @param date Tarih
+     * @return İlk eleman ayın ilk günü, ikinci eleman ayın son günü
+     */
+    public static List<LocalDate> getMonthStartAndEnd(LocalDate date) {
+        if (date == null) {
+            date = getCurrentDate();
+        }
+
+        List<LocalDate> startAndEnd = new ArrayList<>();
+        LocalDate firstDay = date.withDayOfMonth(1);
+        LocalDate lastDay = date.withDayOfMonth(date.lengthOfMonth());
+
+        startAndEnd.add(firstDay);
+        startAndEnd.add(lastDay);
+
+        return startAndEnd;
+    }
+
+    /**
+     * Belirtilen tarihin içinde bulunduğu haftanın başlangıç ve bitiş tarihlerini döndürür
+     *
+     * @param date Tarih
+     * @return İlk eleman haftanın ilk günü (Pazartesi), ikinci eleman haftanın son günü (Pazar)
+     */
+    public static List<LocalDate> getWeekStartAndEnd(LocalDate date) {
+        if (date == null) {
+            date = getCurrentDate();
+        }
+
+        List<LocalDate> startAndEnd = new ArrayList<>();
+        LocalDate monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate sunday = monday.plusDays(6);
+
+        startAndEnd.add(monday);
+        startAndEnd.add(sunday);
+
+        return startAndEnd;
     }
 }

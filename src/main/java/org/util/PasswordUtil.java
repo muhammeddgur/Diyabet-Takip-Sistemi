@@ -2,31 +2,45 @@ package org.util;
 
 import org.mindrot.jbcrypt.BCrypt;
 
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-
-public class Password {
-    private static final Logger LOGGER = Logger.getLogger(Password.class.getName());
+/**
+ * Şifre işlemlerini yönetmek için yardımcı sınıf.
+ */
+public class PasswordUtil {
+    private static final Logger LOGGER = Logger.getLogger(PasswordUtil.class.getName());
     private static final int WORK_FACTOR = 12; // BCrypt için iş faktörü (zorluk seviyesi)
 
-    private Password() {
-        // Private constructor to prevent instantiation
+    private PasswordUtil() {
+        // Örnekleme önlemek için private constructor
     }
 
-
-    public static String hashPassword(String password) {
+    /**
+     * Şifreyi hashler.
+     *
+     * @param password Hashlenecek şifre
+     * @return Hashlenmiş şifre
+     * @throws NoSuchAlgorithmException Algoritma bulunamazsa
+     */
+    public static String hashPassword(String password) throws NoSuchAlgorithmException {
         try {
-            String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt(WORK_FACTOR));
-            return hashedPassword;
+            return BCrypt.hashpw(password, BCrypt.gensalt(WORK_FACTOR));
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Şifre hashleme hatası", e);
-            throw new RuntimeException("Şifreleme hatası", e);
+            throw new NoSuchAlgorithmException("Şifreleme algoritması bulunamadı veya hata oluştu: " + e.getMessage());
         }
     }
 
-
+    /**
+     * Şifreyi doğrular.
+     *
+     * @param password Kontrol edilecek şifre
+     * @param hashedPassword Hashlenmiş şifre
+     * @return Eşleşme durumu
+     */
     public static boolean verifyPassword(String password, String hashedPassword) {
         try {
             return BCrypt.checkpw(password, hashedPassword);
@@ -39,6 +53,12 @@ public class Password {
         }
     }
 
+    /**
+     * Rastgele şifre oluşturur.
+     *
+     * @param length Şifre uzunluğu
+     * @return Oluşturulan şifre
+     */
     public static String generateRandomPassword(int length) {
         if (length < 8) {
             length = 8;
@@ -77,6 +97,12 @@ public class Password {
         return new String(password);
     }
 
+    /**
+     * Şifrenin güçlülüğünü kontrol eder.
+     *
+     * @param password Kontrol edilecek şifre
+     * @return Güçlülük puanı (0-4)
+     */
     public static int checkPasswordStrength(String password) {
         int score = 0;
 

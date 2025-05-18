@@ -1,65 +1,69 @@
 package org.model;
 
-/**
- * Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-05-14 15:53:19
- * Current User's Login: Emirhan-Karabulut
- *
- * Doktor bilgilerini tutan model sınıfı
- * Lisans numarası, hastane ve uzmanlık alanı kaldırıldı
- */
-public class Doctor {
-    private Integer doctorId;
-    private Integer userId;
-    private User user; // İlişki için referans
+import java.util.ArrayList;
+import java.util.List;
+
+public class Doctor extends User {
+    private Integer doctor_id;
+    private List<Patient> patients;
 
     // Constructors
-    public Doctor() {}
+    public Doctor() {
+        super();
+        this.patients = new ArrayList<>();
+        setKullanici_tipi("doktor");
+    }
 
-    public Doctor(Integer doctorId, Integer userId) {
-        this.doctorId = doctorId;
-        this.userId = userId;
+    public Doctor(User user) {
+        super(user.getTc_kimlik(), user.getPassword(), user.getEmail(), user.getAd(),
+                user.getSoyad(), user.getDogum_tarihi(), user.getCinsiyet(), "doktor");
+        this.setUser_id(user.getUser_id());
+        this.setProfil_resmi(user.getProfil_resmi());
+        this.setCreated_at(user.getCreated_at());
+        this.setLast_login(user.getLast_login());
+        this.patients = new ArrayList<>();
     }
 
     // Getters and Setters
-    public Integer getDoctorId() {
-        return doctorId;
+    public Integer getDoctor_id() {
+        return doctor_id;
     }
 
-    public void setDoctorId(Integer doctorId) {
-        this.doctorId = doctorId;
+    public void setDoctor_id(Integer doctor_id) {
+        this.doctor_id = doctor_id;
     }
 
-    public Integer getUserId() {
-        return userId;
+    public List<Patient> getPatients() {
+        return patients;
     }
 
-    public void setUserId(Integer userId) {
-        this.userId = userId;
+    public void setPatients(List<Patient> patients) {
+        this.patients = patients;
     }
 
-    public User getUser() {
-        return user;
+    // Helper methods
+    public void addPatient(Patient patient) {
+        if (!patients.contains(patient)) {
+            patients.add(patient);
+            patient.setDoctor(this);
+        }
     }
 
-    public void setUser(User user) {
-        this.user = user;
+    public void removePatient(Patient patient) {
+        if (patients.contains(patient)) {
+            patients.remove(patient);
+            patient.setDoctor(null);
+        }
     }
 
     @Override
     public String toString() {
         return "Doctor{" +
-                "doctorId=" + doctorId +
-                ", userId=" + userId +
+                "doctor_id=" + doctor_id +
+                ", user_id=" + getUser_id() +
+                ", ad='" + getAd() + '\'' +
+                ", soyad='" + getSoyad() + '\'' +
+                ", patientCount=" + (patients != null ? patients.size() : 0) +
                 '}';
-    }
-
-    /**
-     * Doktorun tam adını döndürür
-     */
-    public String getFullTitle() {
-        if (user != null) {
-            return "Dr. " + user.getFullName();
-        }
-        return "Dr. (Bilgi yok)";
     }
 }

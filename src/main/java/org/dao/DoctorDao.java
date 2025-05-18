@@ -1,156 +1,210 @@
 package org.dao;
 
 import org.model.Doctor;
+import org.model.Patient;
 import org.model.User;
-import org.util.DatabaseConnection;
-
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-05-14 15:53:19
- * Current User's Login: Emirhan-Karabulut
- *
- * Doktor tablosu için veritabanı işlemlerini yöneten DAO sınıfı
- * Lisans numarası, hastane ve uzmanlık alanı kaldırıldı
+ * DoctorDao arayüzünün implementasyonu.
  */
-public class DoctorDao {
-    private UserDao userDao = new UserDao();
+public class DoctorDao implements IDoctorDao {
 
-    public Doctor findById(Integer doctorId) throws SQLException {
+    private final DatabaseConnectionManager connectionManager;
+    private final UserDao userDao;
+
+    public DoctorDao() {
+        connectionManager = DatabaseConnectionManager.getInstance();
+        userDao = new UserDao();
+    }
+
+    @Override
+    public Doctor findById(Integer id) throws SQLException {
         String sql = "SELECT * FROM doctors WHERE doctor_id = ?";
+        Doctor doctor = null;
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, doctorId);
+            stmt.setInt(1, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return mapResultSetToDoctor(rs);
+                    int userId = rs.getInt("user_id");
+                    User user = userDao.findById(userId);
+                    if (user != null) {
+                        doctor = new Doctor(user);
+                        doctor.setDoctor_id(id);
+                    }
                 }
             }
         }
 
-        return null;
+        return doctor;
     }
 
+    @Override
+    public List<Doctor> findAll() throws SQLException {
+        String sql = "SELECT * FROM doctors";
+        List<Doctor> doctors = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                int doctorId = rs.getInt("doctor_id");
+                int userId = rs.getInt("user_id");
+                User user = userDao.findById(userId);
+                if (user != null) {
+                    Doctor doctor = new Doctor(user);
+                    doctor.setDoctor_id(doctorId);
+                    doctors.add(doctor);
+                }
+            }
+        }
+
+        return doctors;
+    }
+
+    @Override
+    public boolean save(Doctor doctor) throws SQLException {
+        if (doctor.getUser_id() == null) {
+            // Önce User kaydedilmeli
+            boolean userSaved = userDao.save(doctor);
+            if (!userSaved) {
+                return false;
+            }
+        }
+
+        if (doctor.getDoctor_id() == null) {
+            // Insert
+            String sql = "INSERT INTO doctors (user_id) VALUES (?) RETURNING doctor_id";
+
+            try (Connection conn = connectionManager.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setInt(1, doctor.getUser_id());
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        doctor.setDoctor_id(rs.getInt(1));
+                        return true;
+                    }
+                }
+            }
+        } else {
+            // Update (sadece User güncellenir, doctor-user ilişkisi değişmez)
+            return userDao.save(doctor);
+        }
+
+        return false;
+    }
+
+    @Override
+    public boolean delete(Integer id) throws SQLException {
+        // Önce ilgili doktorun user_id'sini almalıyız
+        Doctor doctor = findById(id);
+        if (doctor == null) {
+            return false;
+        }
+
+        String sql = "DELETE FROM doctors WHERE doctor_id = ?";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, id);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                // Doktor silindikten sonra User da silinmeli
+                return userDao.delete(doctor.getUser_id());
+            }
+        }
+
+        return false;
+    }
+
+    @Override
     public Doctor findByUserId(Integer userId) throws SQLException {
         String sql = "SELECT * FROM doctors WHERE user_id = ?";
+        Doctor doctor = null;
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setInt(1, userId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return mapResultSetToDoctor(rs);
+                    int doctorId = rs.getInt("doctor_id");
+                    User user = userDao.findById(userId);
+                    if (user != null) {
+                        doctor = new Doctor(user);
+                        doctor.setDoctor_id(doctorId);
+                    }
                 }
             }
-        }
-
-        return null;
-    }
-
-    public List<Doctor> findAll() throws SQLException {
-        String sql = "SELECT * FROM doctors";
-        List<Doctor> doctors = new ArrayList<>();
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-
-            while (rs.next()) {
-                doctors.add(mapResultSetToDoctor(rs));
-            }
-        }
-
-        return doctors;
-    }
-
-    public Integer save(Doctor doctor) throws SQLException {
-        String sql = "INSERT INTO doctors (user_id) VALUES (?) RETURNING doctor_id";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, doctor.getUserId());
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    public void delete(Integer doctorId) throws SQLException {
-        String sql = "DELETE FROM doctors WHERE doctor_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, doctorId);
-            stmt.executeUpdate();
-        }
-    }
-
-    public List<Doctor> findWithUserDetails() throws SQLException {
-        String sql = "SELECT d.*, u.* FROM doctors d " +
-                "JOIN users u ON d.user_id = u.user_id";
-        List<Doctor> doctors = new ArrayList<>();
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-
-            while (rs.next()) {
-                Doctor doctor = new Doctor();
-                doctor.setDoctorId(rs.getInt("doctor_id"));
-                doctor.setUserId(rs.getInt("user_id"));
-
-                User user = new User();
-                user.setUserId(rs.getInt("user_id"));
-                user.setTcIdentity(rs.getString("tc_identity"));
-                user.setPassword(rs.getString("password"));
-                user.setFirstName(rs.getString("first_name"));
-                user.setLastName(rs.getString("last_name"));
-                user.setEmail(rs.getString("email"));
-                user.setBirthDate(rs.getDate("birth_date").toLocalDate());
-                user.setGender(rs.getString("gender"));
-                user.setProfilePhoto(rs.getBytes("profile_photo"));
-                user.setUserType(rs.getString("user_type"));
-
-                Timestamp createdAt = rs.getTimestamp("created_at");
-                if (createdAt != null) {
-                    user.setCreatedAt(createdAt.toLocalDateTime());
-                }
-
-                doctor.setUser(user);
-                doctors.add(doctor);
-            }
-        }
-
-        return doctors;
-    }
-
-    private Doctor mapResultSetToDoctor(ResultSet rs) throws SQLException {
-        Doctor doctor = new Doctor();
-        doctor.setDoctorId(rs.getInt("doctor_id"));
-        doctor.setUserId(rs.getInt("user_id"));
-
-        // Kullanıcı bilgisini yükleme
-        try {
-            User user = userDao.findById(doctor.getUserId());
-            doctor.setUser(user);
-        } catch (SQLException e) {
-            // Hata durumunda sadece doktor bilgilerini döndürmek için hatayı yut
         }
 
         return doctor;
+    }
+
+    @Override
+    public int getPatientCount(Integer doctorId) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM patients WHERE doctor_id = ?";
+        int count = 0;
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, doctorId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    count = rs.getInt(1);
+                }
+            }
+        }
+
+        return count;
+    }
+
+    @Override
+    public List<Patient> getPatients(Integer doctorId) throws SQLException {
+        String sql = "SELECT p.patient_id, p.user_id FROM patients p WHERE p.doctor_id = ?";
+        List<Patient> patients = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, doctorId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int patientId = rs.getInt("patient_id");
+                    int userId = rs.getInt("user_id");
+
+                    User user = userDao.findById(userId);
+                    if (user != null) {
+                        Patient patient = new Patient(user);
+                        patient.setPatient_id(patientId);
+
+                        // Doktor bilgisini ekle
+                        Doctor doctor = this.findById(doctorId);
+                        if (doctor != null) {
+                            patient.setDoctor(doctor);
+                        }
+
+                        patients.add(patient);
+                    }
+                }
+            }
+        }
+
+        return patients;
     }
 }

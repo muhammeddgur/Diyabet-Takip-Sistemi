@@ -1,64 +1,64 @@
 package org.dao;
 
 import org.model.Alert;
+import org.model.AlertType;
+import org.model.Doctor;
 import org.model.Patient;
-import org.util.DatabaseConnection;
-
 import java.sql.*;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AlertDao {
-    private PatientDao patientDao = new PatientDao();
+/**
+ * AlertDao arayüzünün implementasyonu.
+ */
+public class AlertDao implements IAlertDao {
 
-    public Alert findById(Integer alertId) throws SQLException {
+    private final DatabaseConnectionManager connectionManager;
+    private final PatientDao patientDao;
+    private final DoctorDao doctorDao;
+    private final AlertTypeDao alertTypeDao;
+
+    public AlertDao() {
+        connectionManager = DatabaseConnectionManager.getInstance();
+        patientDao = new PatientDao();
+        doctorDao = new DoctorDao();
+        alertTypeDao = new AlertTypeDao();
+    }
+
+    @Override
+    public Alert findById(Integer id) throws SQLException {
         String sql = "SELECT * FROM alerts WHERE alert_id = ?";
+        Alert alert = null;
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, alertId);
+            stmt.setInt(1, id);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return mapResultSetToAlert(rs);
+                    alert = mapResultSetToAlert(rs);
                 }
             }
         }
 
-        return null;
+        return alert;
     }
 
+    @Override
     public List<Alert> findAll() throws SQLException {
-        String sql = "SELECT * FROM alerts ORDER BY created_at DESC";
+        String sql = "SELECT * FROM alerts ORDER BY olusturma_zamani DESC";
         List<Alert> alerts = new ArrayList<>();
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
-                alerts.add(mapResultSetToAlert(rs));
-            }
-        }
-
-        return alerts;
-    }
-
-    public List<Alert> findByPatientId(Integer patientId) throws SQLException {
-        String sql = "SELECT * FROM alerts WHERE patient_id = ? ORDER BY created_at DESC";
-        List<Alert> alerts = new ArrayList<>();
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, patientId);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    alerts.add(mapResultSetToAlert(rs));
+                Alert alert = mapResultSetToAlert(rs);
+                if (alert != null) {
+                    alerts.add(alert);
                 }
             }
         }
@@ -66,226 +66,194 @@ public class AlertDao {
         return alerts;
     }
 
-    public List<Alert> findByPatientIdAndDate(Integer patientId, LocalDate date) throws SQLException {
-        String sql = "SELECT * FROM alerts WHERE patient_id = ? AND DATE(created_at) = ? " +
-                "ORDER BY created_at DESC";
-        List<Alert> alerts = new ArrayList<>();
+    @Override
+    public boolean save(Alert alert) throws SQLException {
+        if (alert.getAlert_id() == null) {
+            // Insert
+            String sql = "INSERT INTO alerts (patient_id, doctor_id, alert_type_id, mesaj, olusturma_zamani, okundu_mu) " +
+                    "VALUES (?, ?, ?, ?, ?, ?) RETURNING alert_id";
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try (Connection conn = connectionManager.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, patientId);
-            stmt.setDate(2, Date.valueOf(date));
+                stmt.setInt(1, alert.getPatient().getPatient_id());
+                stmt.setInt(2, alert.getDoctor().getDoctor_id());
+                stmt.setInt(3, alert.getAlertType().getAlert_type_id());
+                stmt.setString(4, alert.getMesaj());
+                stmt.setTimestamp(5, Timestamp.valueOf(alert.getOlusturma_zamani()));
+                stmt.setBoolean(6, alert.getOkundu_mu());
 
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    alerts.add(mapResultSetToAlert(rs));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        alert.setAlert_id(rs.getInt(1));
+                        return true;
+                    }
                 }
+            }
+        } else {
+            // Update
+            String sql = "UPDATE alerts SET patient_id = ?, doctor_id = ?, alert_type_id = ?, mesaj = ?, " +
+                    "okundu_mu = ?, okunma_zamani = ? WHERE alert_id = ?";
+
+            try (Connection conn = connectionManager.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setInt(1, alert.getPatient().getPatient_id());
+                stmt.setInt(2, alert.getDoctor().getDoctor_id());
+                stmt.setInt(3, alert.getAlertType().getAlert_type_id());
+                stmt.setString(4, alert.getMesaj());
+                stmt.setBoolean(5, alert.getOkundu_mu());
+
+                if (alert.getOkunma_zamani() != null) {
+                    stmt.setTimestamp(6, Timestamp.valueOf(alert.getOkunma_zamani()));
+                } else {
+                    stmt.setNull(6, Types.TIMESTAMP);
+                }
+
+                stmt.setInt(7, alert.getAlert_id());
+
+                int affectedRows = stmt.executeUpdate();
+                return affectedRows > 0;
             }
         }
 
-        return alerts;
+        return false;
     }
 
-    public List<Alert> findUnreadByPatientId(Integer patientId) throws SQLException {
-        String sql = "SELECT * FROM alerts WHERE patient_id = ? AND is_read = false " +
-                "ORDER BY created_at DESC";
-        List<Alert> alerts = new ArrayList<>();
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, patientId);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    alerts.add(mapResultSetToAlert(rs));
-                }
-            }
-        }
-
-        return alerts;
-    }
-
-    public List<Alert> findUrgentByPatientId(Integer patientId) throws SQLException {
-        String sql = "SELECT * FROM alerts WHERE patient_id = ? AND is_urgent = true " +
-                "ORDER BY created_at DESC";
-        List<Alert> alerts = new ArrayList<>();
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, patientId);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    alerts.add(mapResultSetToAlert(rs));
-                }
-            }
-        }
-
-        return alerts;
-    }
-
-    public List<Alert> findByAlertType(String alertType) throws SQLException {
-        String sql = "SELECT * FROM alerts WHERE alert_type = ? ORDER BY created_at DESC";
-        List<Alert> alerts = new ArrayList<>();
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, alertType);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    alerts.add(mapResultSetToAlert(rs));
-                }
-            }
-        }
-
-        return alerts;
-    }
-
-    public Integer save(Alert alert) throws SQLException {
-        String sql = "INSERT INTO alerts (patient_id, alert_type, alert_message, is_read, is_urgent) " +
-                "VALUES (?, ?, ?, ?, ?) RETURNING alert_id";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, alert.getPatientId());
-            stmt.setString(2, alert.getAlertType());
-            stmt.setString(3, alert.getAlertMessage());
-            stmt.setBoolean(4, alert.isRead());
-            stmt.setBoolean(5, alert.isUrgent());
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    public void update(Alert alert) throws SQLException {
-        String sql = "UPDATE alerts SET alert_type = ?, alert_message = ?, is_read = ?, " +
-                "is_urgent = ? WHERE alert_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, alert.getAlertType());
-            stmt.setString(2, alert.getAlertMessage());
-            stmt.setBoolean(3, alert.isRead());
-            stmt.setBoolean(4, alert.isUrgent());
-            stmt.setInt(5, alert.getAlertId());
-
-            stmt.executeUpdate();
-        }
-    }
-
-    public void delete(Integer alertId) throws SQLException {
+    @Override
+    public boolean delete(Integer id) throws SQLException {
         String sql = "DELETE FROM alerts WHERE alert_id = ?";
 
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, alertId);
-            stmt.executeUpdate();
+            stmt.setInt(1, id);
+
+            int affectedRows = stmt.executeUpdate();
+            return affectedRows > 0;
         }
     }
 
-    public void markAsRead(Integer alertId) throws SQLException {
-        String sql = "UPDATE alerts SET is_read = true WHERE alert_id = ?";
+    @Override
+    public List<Alert> findByPatientId(Integer patientId) throws SQLException {
+        String sql = "SELECT * FROM alerts WHERE patient_id = ? ORDER BY olusturma_zamani DESC";
+        List<Alert> alerts = new ArrayList<>();
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, alertId);
-            stmt.executeUpdate();
-        }
-    }
-
-    public void markAllAsRead(Integer patientId) throws SQLException {
-        String sql = "UPDATE alerts SET is_read = true WHERE patient_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
+        try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setInt(1, patientId);
-            stmt.executeUpdate();
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Alert alert = mapResultSetToAlert(rs);
+                    if (alert != null) {
+                        alerts.add(alert);
+                    }
+                }
+            }
+        }
+
+        return alerts;
+    }
+
+    @Override
+    public List<Alert> findByDoctorId(Integer doctorId) throws SQLException {
+        String sql = "SELECT * FROM alerts WHERE doctor_id = ? ORDER BY olusturma_zamani DESC";
+        List<Alert> alerts = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, doctorId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Alert alert = mapResultSetToAlert(rs);
+                    if (alert != null) {
+                        alerts.add(alert);
+                    }
+                }
+            }
+        }
+
+        return alerts;
+    }
+
+    @Override
+    public List<Alert> findUnreadAlerts(Integer doctorId) throws SQLException {
+        String sql = "SELECT * FROM alerts WHERE doctor_id = ? AND okundu_mu = false ORDER BY olusturma_zamani DESC";
+        List<Alert> alerts = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, doctorId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Alert alert = mapResultSetToAlert(rs);
+                    if (alert != null) {
+                        alerts.add(alert);
+                    }
+                }
+            }
+        }
+
+        return alerts;
+    }
+
+    @Override
+    public boolean markAsRead(Integer alertId) throws SQLException {
+        String sql = "UPDATE alerts SET okundu_mu = true, okunma_zamani = ? WHERE alert_id = ?";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+            stmt.setInt(2, alertId);
+
+            int affectedRows = stmt.executeUpdate();
+            return affectedRows > 0;
         }
     }
 
-    public void createMissingMeasurementAlert(Integer patientId) throws SQLException {
-        Alert alert = new Alert();
-        alert.setPatientId(patientId);
-        alert.setAlertType("MISSING_MEASUREMENT");
-        alert.setAlertMessage("Hasta gün boyunca kan şekeri ölçümü yapmamıştır. Acil takip önerilir.");
-        alert.setRead(false);
-        alert.setUrgent(true);
-
-        save(alert);
-    }
-
-    public void createInsufficientMeasurementAlert(Integer patientId, int count) throws SQLException {
-        Alert alert = new Alert();
-        alert.setPatientId(patientId);
-        alert.setAlertType("INSUFFICIENT_MEASUREMENTS");
-        alert.setAlertMessage("Hastanın günlük kan şekeri ölçüm sayısı yetersiz (<3). Durum izlenmelidir. Mevcut ölçüm sayısı: " + count);
-        alert.setRead(false);
-        alert.setUrgent(false);
-
-        save(alert);
-    }
-
-    public void createCriticalValueAlert(Integer patientId, double value) throws SQLException {
-        Alert alert = new Alert();
-        alert.setPatientId(patientId);
-
-        if (value < 70) {
-            alert.setAlertType("HYPOGLYCEMIA");
-            alert.setAlertMessage("Hastanın kan şekeri seviyesi 70 mg/dL'nin altına düştü (" + value +
-                    " mg/dL). Hipoglisemi riski! Hızlı müdahale gerekebilir.");
-            alert.setUrgent(true);
-        } else if (value > 200) {
-            alert.setAlertType("HYPERGLYCEMIA");
-            alert.setAlertMessage("Hastanın kan şekeri 200 mg/dL'nin üzerinde (" + value +
-                    " mg/dL). Hiperglisemi durumu. Acil müdahale gerekebilir.");
-            alert.setUrgent(true);
-        } else if (value > 150) {
-            alert.setAlertType("HIGH_GLUCOSE");
-            alert.setAlertMessage("Hastanın kan şekeri 151-200 mg/dL arasında (" + value +
-                    " mg/dL). Diyabet kontrolü gereklidir.");
-            alert.setUrgent(false);
-        }
-
-        alert.setRead(false);
-        save(alert);
-    }
-
+    // ResultSet'ten Alert nesnesine dönüştürme yardımcı metodu
     private Alert mapResultSetToAlert(ResultSet rs) throws SQLException {
         Alert alert = new Alert();
-        alert.setAlertId(rs.getInt("alert_id"));
-        alert.setPatientId(rs.getInt("patient_id"));
-        alert.setAlertType(rs.getString("alert_type"));
-        alert.setAlertMessage(rs.getString("alert_message"));
-        alert.setRead(rs.getBoolean("is_read"));
-        alert.setUrgent(rs.getBoolean("is_urgent"));
+        alert.setAlert_id(rs.getInt("alert_id"));
+        alert.setMesaj(rs.getString("mesaj"));
+        alert.setOkundu_mu(rs.getBoolean("okundu_mu"));
 
-        Timestamp createdAt = rs.getTimestamp("created_at");
+        Timestamp createdAt = rs.getTimestamp("olusturma_zamani");
         if (createdAt != null) {
-            alert.setCreatedAt(createdAt.toLocalDateTime());
+            alert.setOlusturma_zamani(createdAt.toLocalDateTime());
         }
 
-        // Hasta bilgilerini yükleme
-        try {
-            Patient patient = patientDao.findById(alert.getPatientId());
+        Timestamp readAt = rs.getTimestamp("okunma_zamani");
+        if (readAt != null) {
+            alert.setOkunma_zamani(readAt.toLocalDateTime());
+        }
+
+        // Hasta bilgisini ekle
+        int patientId = rs.getInt("patient_id");
+        Patient patient = patientDao.findById(patientId);
+        if (patient != null) {
             alert.setPatient(patient);
-        } catch (SQLException e) {
-            // Hata durumunda sadece uyarı bilgilerini döndürmek için hatayı yut
+        }
+
+        // Doktor bilgisini ekle
+        int doctorId = rs.getInt("doctor_id");
+        Doctor doctor = doctorDao.findById(doctorId);
+        if (doctor != null) {
+            alert.setDoctor(doctor);
+        }
+
+        // Uyarı tipi bilgisini ekle
+        int alertTypeId = rs.getInt("alert_type_id");
+        AlertType alertType = alertTypeDao.findById(alertTypeId);
+        if (alertType != null) {
+            alert.setAlertType(alertType);
         }
 
         return alert;

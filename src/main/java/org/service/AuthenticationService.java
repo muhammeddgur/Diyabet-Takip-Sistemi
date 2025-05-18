@@ -1,333 +1,247 @@
 package org.service;
 
-import org.dao.DoctorDao;
-import org.dao.PatientDao;
+import org.dao.IUserDao;
 import org.dao.UserDao;
-import org.model.Doctor;
-import org.model.Patient;
 import org.model.User;
-import org.util.DateTime;
-import org.util.Password;
+import org.util.PasswordUtil;
+import org.util.ValidationUtil;
 
+import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.UUID;
 
 /**
- * Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-05-14 16:07:56
- * Current User's Login: Emirhan-Karabulut
- *
- * Kullanıcı kimlik doğrulama ve oturum yönetimi için servis sınıfı.
+ * Kimlik doğrulama ve kullanıcı yönetimi işlemlerini yürüten servis.
  */
 public class AuthenticationService {
-    private static final Logger LOGGER = Logger.getLogger(AuthenticationService.class.getName());
 
-    private final UserDao userDao;
-    private final DoctorDao doctorDao;
-    private final PatientDao patientDao;
-
-    // Aktif oturum bilgilerini tutma
-    private User currentUser;
-    private Doctor currentDoctor;
-    private Patient currentPatient;
-    private LocalDateTime loginTime;
+    private final IUserDao userDao;
+    private final NotificationService notificationService;
 
     public AuthenticationService() {
         this.userDao = new UserDao();
-        this.doctorDao = new DoctorDao();
-        this.patientDao = new PatientDao();
+        this.notificationService = new NotificationService();
     }
 
     /**
-     * TC kimlik numarası ve şifre ile kullanıcı girişi yapar.
+     * Kullanıcı girişi yapar.
      *
-     * @param tcIdentity TC kimlik numarası
+     * @param tcKimlik TC kimlik numarası
      * @param password Şifre
-     * @return Giriş başarılıysa true, değilse false
+     * @return Giriş başarılı ise kullanıcı nesnesi, değilse null
      */
-    public boolean login(String tcIdentity, String password) {
+    public User login(String tcKimlik, String password) {
         try {
-            // Kullanıcıyı TC kimlik numarasına göre bul
-            User user = userDao.findByTcIdentity(tcIdentity);
+            // Şifreyi hashle
+            String hashedPassword = PasswordUtil.hashPassword(password);
 
-            if (user == null) {
-                LOGGER.info("Kullanıcı bulunamadı: " + tcIdentity);
-                return false;
+            // Kullanıcıyı doğrula
+            User user = userDao.authenticate(tcKimlik, hashedPassword);
+
+            // Son giriş zamanını güncelle
+            if (user != null) {
+                user.setLast_login(LocalDateTime.now());
+                userDao.updateLastLogin(user.getUser_id());
             }
 
-            // Şifreyi doğrula
-            if (!Password.verifyPassword(password, user.getPassword())) {
-                LOGGER.info("Şifre doğrulama başarısız: " + tcIdentity);
-                return false;
-            }
-
-            // Giriş başarılı, oturum bilgilerini sakla
-            this.currentUser = user;
-            this.loginTime = DateTime.getCurrentDateTime();
-
-            // Kullanıcının doktor veya hasta bilgilerini de yükle
-            if ("DOCTOR".equals(user.getUserType())) {
-                this.currentDoctor = doctorDao.findByUserId(user.getUserId());
-            } else if ("PATIENT".equals(user.getUserType())) {
-                this.currentPatient = patientDao.findByUserId(user.getUserId());
-            }
-
-            LOGGER.info("Kullanıcı girişi başarılı: " + tcIdentity);
-            return true;
-
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Giriş işlemi sırasında veritabanı hatası", e);
-            return false;
+            return user;
+        } catch (SQLException | NoSuchAlgorithmException e) {
+            System.err.println("Giriş işlemi sırasında bir hata oluştu: " + e.getMessage());
+            return null;
         }
     }
 
     /**
-     * Kullanıcı çıkışı yapar ve oturum bilgilerini temizler.
+     * Kullanıcı çıkışı yapar.
+     *
+     * @param userId Kullanıcı ID'si
+     * @return İşlem başarılı ise true, değilse false
      */
-    public void logout() {
-        this.currentUser = null;
-        this.currentDoctor = null;
-        this.currentPatient = null;
-        this.loginTime = null;
-        LOGGER.info("Kullanıcı çıkışı yapıldı");
+    public boolean logout(Integer userId) {
+        // Bu metod şu an için bir şey yapmıyor
+        // Gerçek uygulamada oturum yönetimi burada yapılabilir
+        return true;
     }
 
     /**
-     * Kullanıcının şifresini değiştirir.
+     * Yeni kullanıcı kaydı yapar.
      *
-     * @param userId Kullanıcı ID
+     * @param user Kaydedilecek kullanıcı bilgileri
+     * @return Kayıt başarılı ise kullanıcı nesnesi, değilse null
+     */
+    public User register(User user) {
+        try {
+            // TC kimlik formatını doğrula
+            if (!ValidationUtil.validateTcKimlik(user.getTc_kimlik())) {
+                System.err.println("Geçersiz TC kimlik numarası formatı.");
+                return null;
+            }
+
+            // Ad ve soyad doğrulaması
+            if (!ValidationUtil.validateName(user.getAd()) || !ValidationUtil.validateName(user.getSoyad())) {
+                System.err.println("Ad veya soyad geçersiz format içeriyor.");
+                return null;
+            }
+
+            // E-posta formatını doğrula
+            if (!ValidationUtil.validateEmail(user.getEmail())) {
+                System.err.println("Geçersiz e-posta formatı.");
+                return null;
+            }
+
+            // Şifre karmaşıklığını doğrula
+            if (!ValidationUtil.validatePassword(user.getPassword())) {
+                System.err.println("Şifre gereksinimleri karşılanmıyor (en az 8 karakter, büyük/küçük harf, rakam ve özel karakter).");
+                return null;
+            }
+
+            // Kullanıcının daha önce kayıtlı olup olmadığını kontrol et
+            User existingUser = userDao.findByTcKimlik(user.getTc_kimlik());
+            if (existingUser != null) {
+                System.err.println("Bu TC kimlik numarası ile kayıtlı bir kullanıcı zaten var.");
+                return null;
+            }
+
+            existingUser = userDao.findByEmail(user.getEmail());
+            if (existingUser != null) {
+                System.err.println("Bu e-posta adresi ile kayıtlı bir kullanıcı zaten var.");
+                return null;
+            }
+
+            // Şifreyi hashle
+            String hashedPassword = PasswordUtil.hashPassword(user.getPassword());
+            user.setPassword(hashedPassword);
+
+            // Oluşturulma zamanını ayarla
+            user.setCreated_at(LocalDateTime.now());
+
+            // Kullanıcıyı kaydet
+            boolean saved = userDao.save(user);
+
+            if (saved) {
+                // Hoş geldin e-postası gönder
+                notificationService.sendEmail(
+                        user.getEmail(),
+                        "Diyabet Takip Sistemine Hoş Geldiniz",
+                        "Sayın " + user.getAd() + " " + user.getSoyad() + ",\n\n" +
+                                "Diyabet Takip Sistemine kaydınız başarıyla gerçekleştirilmiştir. " +
+                                "Sisteme TC kimlik numaranız ve şifreniz ile giriş yapabilirsiniz."
+                );
+
+                return user;
+            }
+        } catch (SQLException | NoSuchAlgorithmException e) {
+            System.err.println("Kayıt işlemi sırasında bir hata oluştu: " + e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Şifre sıfırlama işlemi başlatır.
+     *
+     * @param email E-posta adresi
+     * @return İşlem başarılı ise true, değilse false
+     */
+    public boolean resetPassword(String email) {
+        try {
+            // E-posta formatını doğrula
+            if (!ValidationUtil.validateEmail(email)) {
+                System.err.println("Geçersiz e-posta formatı.");
+                return false;
+            }
+
+            // E-posta adresine sahip kullanıcıyı bul
+            User user = userDao.findByEmail(email);
+
+            if (user == null) {
+                System.err.println("Bu e-posta adresiyle kayıtlı kullanıcı bulunamadı.");
+                return false;
+            }
+
+            // Geçici bir şifre oluştur
+            String temporaryPassword = UUID.randomUUID().toString().substring(0, 8);
+
+            // Şifreyi hashle
+            String hashedPassword = PasswordUtil.hashPassword(temporaryPassword);
+            user.setPassword(hashedPassword);
+
+            // Kullanıcıyı güncelle
+            boolean updated = userDao.save(user);
+
+            if (updated) {
+                // Geçici şifre bilgisini e-posta ile gönder
+                notificationService.sendEmail(
+                        user.getEmail(),
+                        "Diyabet Takip Sistemi - Şifre Sıfırlama",
+                        "Sayın " + user.getAd() + " " + user.getSoyad() + ",\n\n" +
+                                "Şifre sıfırlama talebiniz alınmıştır. Geçici şifreniz: " + temporaryPassword + "\n" +
+                                "Bu şifre ile giriş yaptıktan sonra lütfen şifrenizi değiştirin."
+                );
+
+                return true;
+            }
+        } catch (SQLException | NoSuchAlgorithmException e) {
+            System.err.println("Şifre sıfırlama işlemi sırasında bir hata oluştu: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Kullanıcı şifresini değiştirir.
+     *
+     * @param userId Kullanıcı ID'si
      * @param oldPassword Eski şifre
      * @param newPassword Yeni şifre
-     * @return İşlem başarılıysa true, değilse false
+     * @return İşlem başarılı ise true, değilse false
      */
     public boolean changePassword(Integer userId, String oldPassword, String newPassword) {
         try {
+            // Kullanıcıyı bul
             User user = userDao.findById(userId);
 
             if (user == null) {
-                LOGGER.info("Şifre değiştirme işlemi için kullanıcı bulunamadı: " + userId);
+                System.err.println("Kullanıcı bulunamadı.");
                 return false;
             }
 
             // Eski şifreyi doğrula
-            if (!Password.verifyPassword(oldPassword, user.getPassword())) {
-                LOGGER.info("Şifre değiştirme işlemi için eski şifre doğrulanamadı: " + userId);
+            String hashedOldPassword = PasswordUtil.hashPassword(oldPassword);
+            if (!user.getPassword().equals(hashedOldPassword)) {
+                System.err.println("Eski şifre yanlış.");
                 return false;
             }
 
-            // Yeni şifreyi güvenlik kontrolü
-            int passwordStrength = Password.checkPasswordStrength(newPassword);
-            if (passwordStrength < 3) {
-                LOGGER.info("Şifre değiştirme işlemi için yeni şifre yeterince güçlü değil: " + userId);
+            // Yeni şifre formatını doğrula
+            if (!ValidationUtil.validatePassword(newPassword)) {
+                System.err.println("Yeni şifre gereksinimleri karşılamıyor (en az 8 karakter, büyük/küçük harf, rakam ve özel karakter).");
                 return false;
             }
 
-            // Şifreyi değiştir
-            userDao.changePassword(userId, newPassword);
-            LOGGER.info("Şifre değiştirme işlemi başarılı: " + userId);
-            return true;
+            // Yeni şifreyi hashle
+            String hashedNewPassword = PasswordUtil.hashPassword(newPassword);
+            user.setPassword(hashedNewPassword);
 
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Şifre değiştirme sırasında veritabanı hatası", e);
-            return false;
-        }
-    }
+            // Kullanıcıyı güncelle
+            boolean updated = userDao.save(user);
 
-    /**
-     * Şifremi unuttum işlemi için yeni bir rastgele şifre oluşturur.
-     * Gerçek bir uygulamada e-posta gönderme işlemi de yapılmalıdır.
-     *
-     * @param tcIdentity TC kimlik numarası
-     * @param email E-posta adresi (doğrulama için)
-     * @return Başarılıysa yeni şifre, başarısızsa null
-     */
-    public String resetPassword(String tcIdentity, String email) {
-        try {
-            User user = userDao.findByTcIdentity(tcIdentity);
+            if (updated) {
+                // Şifre değişikliği bilgisini e-posta ile gönder
+                notificationService.sendEmail(
+                        user.getEmail(),
+                        "Diyabet Takip Sistemi - Şifre Değişikliği",
+                        "Sayın " + user.getAd() + " " + user.getSoyad() + ",\n\n" +
+                                "Şifreniz başarıyla değiştirilmiştir."
+                );
 
-            if (user == null || !user.getEmail().equals(email)) {
-                LOGGER.info("Şifre sıfırlama için kullanıcı bulunamadı veya e-posta eşleşmedi: " + tcIdentity);
-                return null;
+                return true;
             }
-
-            // Yeni bir rastgele şifre oluştur
-            String newPassword = Password.generateRandomPassword(10);
-
-            // Şifreyi güncelle
-            userDao.changePassword(user.getUserId(), newPassword);
-
-            // Gerçek bir uygulamada burada e-posta gönderme işlemi yapılmalıdır
-            LOGGER.info("Şifre sıfırlama başarılı, e-posta gönderildi: " + tcIdentity);
-
-            return newPassword;
-
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Şifre sıfırlama sırasında veritabanı hatası", e);
-            return null;
+        } catch (SQLException | NoSuchAlgorithmException e) {
+            System.err.println("Şifre değiştirme işlemi sırasında bir hata oluştu: " + e.getMessage());
         }
-    }
 
-    /**
-     * Mevcut oturum açmış kullanıcıyı döndürür.
-     *
-     * @return Oturum açmış kullanıcı, yoksa null
-     */
-    public User getCurrentUser() {
-        return currentUser;
-    }
-
-    /**
-     * Mevcut oturum açmış doktoru döndürür.
-     *
-     * @return Oturum açmış doktor, yoksa null
-     */
-    public Doctor getCurrentDoctor() {
-        return currentDoctor;
-    }
-
-    /**
-     * Mevcut oturum açmış hastayı döndürür.
-     *
-     * @return Oturum açmış hasta, yoksa null
-     */
-    public Patient getCurrentPatient() {
-        return currentPatient;
-    }
-
-    /**
-     * Giriş yapma zamanını döndürür.
-     *
-     * @return Giriş yapma zamanı, yoksa null
-     */
-    public LocalDateTime getLoginTime() {
-        return loginTime;
-    }
-
-    /**
-     * TC kimlik numarasına göre kullanıcıyı bulur.
-     *
-     * @param tcIdentity TC kimlik numarası
-     * @return Bulunan kullanıcı, yoksa null
-     */
-    public User getUserByTcIdentity(String tcIdentity) {
-        try {
-            return userDao.findByTcIdentity(tcIdentity);
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Kullanıcı arama sırasında veritabanı hatası", e);
-            return null;
-        }
-    }
-
-    /**
-     * Kullanıcının bir oturumu olup olmadığını kontrol eder.
-     *
-     * @return Oturum varsa true, yoksa false
-     */
-    public boolean isLoggedIn() {
-        return currentUser != null;
-    }
-
-    /**
-     * Kullanıcının doktor olup olmadığını kontrol eder.
-     *
-     * @return Doktor ise true, değilse false
-     */
-    public boolean isDoctor() {
-        return isLoggedIn() && "DOCTOR".equals(currentUser.getUserType());
-    }
-
-    /**
-     * Kullanıcının hasta olup olmadığını kontrol eder.
-     *
-     * @return Hasta ise true, değilse false
-     */
-    public boolean isPatient() {
-        return isLoggedIn() && "PATIENT".equals(currentUser.getUserType());
-    }
-
-    /**
-     * Yeni doktor kullanıcısı oluşturur (yönetici yetkisi gerekir).
-     * Doktor nesnesinin specialization, hospital ve licenseNumber alanları kaldırıldı.
-     *
-     * @param user Kullanıcı temel bilgileri
-     * @param doctor Doktor bilgileri (sadece user_id içeriyor)
-     * @return Oluşturulan doktorun ID'si, başarısızsa null
-     */
-    public Integer createDoctor(User user, Doctor doctor) {
-        try {
-            // Kullanıcı tipini DOCTOR olarak ayarla
-            user.setUserType("DOCTOR");
-
-            // Kullanıcıyı kaydet
-            Integer userId = userDao.save(user);
-            if (userId == null) {
-                LOGGER.log(Level.SEVERE, "Doktor oluşturma: Kullanıcı kaydedilemedi");
-                return null;
-            }
-
-            // Doktor nesnesine kullanıcı ID'sini ayarla
-            doctor.setUserId(userId);
-
-            // Doktoru kaydet
-            Integer doctorId = doctorDao.save(doctor);
-
-            if (doctorId == null) {
-                LOGGER.log(Level.SEVERE, "Doktor oluşturma: Doktor kaydedilemedi");
-                // Temizlik: Oluşturulan kullanıcıyı sil
-                try {
-                    userDao.delete(userId);
-                } catch (SQLException cleanupEx) {
-                    LOGGER.log(Level.SEVERE, "Temizlik işlemi başarısız: Kullanıcı silinemedi", cleanupEx);
-                }
-                return null;
-            }
-
-            LOGGER.info("Yeni doktor başarıyla oluşturuldu. UserID: " + userId + ", DoctorID: " + doctorId);
-            return doctorId;
-
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Doktor oluşturma sırasında veritabanı hatası", e);
-            return null;
-        }
-    }
-
-    /**
-     * Yeni hasta kullanıcısı oluşturur (doktor yetkisi gerekir).
-     *
-     * @param user Kullanıcı temel bilgileri
-     * @param patient Hasta bilgileri
-     * @return Oluşturulan hastanın ID'si, başarısızsa null
-     */
-    public Integer createPatient(User user, Patient patient) {
-        try {
-            // Kullanıcı tipini PATIENT olarak ayarla
-            user.setUserType("PATIENT");
-
-            // Rastgele bir şifre oluştur
-            String password = Password.generateRandomPassword(10);
-            user.setPassword(password);
-
-            // Kullanıcıyı kaydet
-            Integer userId = userDao.save(user);
-            if (userId == null) {
-                return null;
-            }
-
-            // Hasta nesnesine kullanıcı ID'sini ayarla
-            patient.setUserId(userId);
-
-            // Hastayı kaydet
-            Integer patientId = patientDao.save(patient);
-
-            // Gerçek bir uygulamada burada hastanın e-posta adresine kullanıcı adı ve şifre gönderilir
-            LOGGER.info("Yeni hasta oluşturuldu, giriş bilgileri e-posta ile gönderildi: " + user.getEmail());
-
-            return patientId;
-
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Hasta oluşturma sırasında veritabanı hatası", e);
-            return null;
-        }
+        return false;
     }
 }

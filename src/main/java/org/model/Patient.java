@@ -1,92 +1,46 @@
 package org.model;
 
-import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-05-14 15:56:25
- * Current User's Login: Emirhan-Karabulut
- *
- * Hasta bilgilerini tutan model sınıfı
- * height ve weight alanları kaldırıldı
- */
-public class Patient {
-    private Integer patientId;
-    private Integer userId;
-    private Integer doctorId;
-    private LocalDate diagnosisDate;
-    private String diabetesType;
-    private String notes;
-    private User user; // İlişki için referans
-    private Doctor doctor; // İlişki için referans
+public class Patient extends User {
+    private Integer patient_id;
+    private Doctor doctor;
+    private List<BloodSugarMeasurement> measurements;
+    private List<Diet> dietPlans;
+    private List<Exercise> exercises;
+    private List<Symptom> symptoms;
 
     // Constructors
-    public Patient() {}
+    public Patient() {
+        super();
+        this.measurements = new ArrayList<>();
+        this.dietPlans = new ArrayList<>();
+        this.exercises = new ArrayList<>();
+        this.symptoms = new ArrayList<>();
+        setKullanici_tipi("hasta");
+    }
 
-    public Patient(Integer patientId, Integer userId, Integer doctorId, LocalDate diagnosisDate,
-                   String diabetesType, String notes) {
-        this.patientId = patientId;
-        this.userId = userId;
-        this.doctorId = doctorId;
-        this.diagnosisDate = diagnosisDate;
-        this.diabetesType = diabetesType;
-        this.notes = notes;
+    public Patient(User user) {
+        super(user.getTc_kimlik(), user.getPassword(), user.getEmail(), user.getAd(),
+                user.getSoyad(), user.getDogum_tarihi(), user.getCinsiyet(), "hasta");
+        this.setUser_id(user.getUser_id());
+        this.setProfil_resmi(user.getProfil_resmi());
+        this.setCreated_at(user.getCreated_at());
+        this.setLast_login(user.getLast_login());
+        this.measurements = new ArrayList<>();
+        this.dietPlans = new ArrayList<>();
+        this.exercises = new ArrayList<>();
+        this.symptoms = new ArrayList<>();
     }
 
     // Getters and Setters
-    public Integer getPatientId() {
-        return patientId;
+    public Integer getPatient_id() {
+        return patient_id;
     }
 
-    public void setPatientId(Integer patientId) {
-        this.patientId = patientId;
-    }
-
-    public Integer getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Integer userId) {
-        this.userId = userId;
-    }
-
-    public Integer getDoctorId() {
-        return doctorId;
-    }
-
-    public void setDoctorId(Integer doctorId) {
-        this.doctorId = doctorId;
-    }
-
-    public LocalDate getDiagnosisDate() {
-        return diagnosisDate;
-    }
-
-    public void setDiagnosisDate(LocalDate diagnosisDate) {
-        this.diagnosisDate = diagnosisDate;
-    }
-
-    public String getDiabetesType() {
-        return diabetesType;
-    }
-
-    public void setDiabetesType(String diabetesType) {
-        this.diabetesType = diabetesType;
-    }
-
-    public String getNotes() {
-        return notes;
-    }
-
-    public void setNotes(String notes) {
-        this.notes = notes;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
+    public void setPatient_id(Integer patient_id) {
+        this.patient_id = patient_id;
     }
 
     public Doctor getDoctor() {
@@ -97,15 +51,73 @@ public class Patient {
         this.doctor = doctor;
     }
 
+    public List<BloodSugarMeasurement> getMeasurements() {
+        return measurements;
+    }
+
+    public void setMeasurements(List<BloodSugarMeasurement> measurements) {
+        this.measurements = measurements;
+    }
+
+    public List<Diet> getDietPlans() {
+        return dietPlans;
+    }
+
+    public void setDietPlans(List<Diet> dietPlans) {
+        this.dietPlans = dietPlans;
+    }
+
+    public List<Exercise> getExercises() {
+        return exercises;
+    }
+
+    public void setExercises(List<Exercise> exercises) {
+        this.exercises = exercises;
+    }
+
+    public List<Symptom> getSymptoms() {
+        return symptoms;
+    }
+
+    public void setSymptoms(List<Symptom> symptoms) {
+        this.symptoms = symptoms;
+    }
+
+    // Helper methods
+    public void addMeasurement(BloodSugarMeasurement measurement) {
+        if (!measurements.contains(measurement)) {
+            measurements.add(measurement);
+            measurement.setPatient(this);
+        }
+    }
+
+    public void addDiet(Diet diet) {
+        if (!dietPlans.contains(diet)) {
+            dietPlans.add(diet);
+        }
+    }
+
+    public void addExercise(Exercise exercise) {
+        if (!exercises.contains(exercise)) {
+            exercises.add(exercise);
+        }
+    }
+
+    public void addSymptom(Symptom symptom) {
+        if (!symptoms.contains(symptom)) {
+            symptoms.add(symptom);
+        }
+    }
+
     @Override
     public String toString() {
         return "Patient{" +
-                "patientId=" + patientId +
-                ", userId=" + userId +
-                ", doctorId=" + doctorId +
-                ", diagnosisDate=" + diagnosisDate +
-                ", diabetesType='" + diabetesType + '\'' +
-                ", notes='" + notes + '\'' +
+                "patient_id=" + patient_id +
+                ", user_id=" + getUser_id() +
+                ", ad='" + getAd() + '\'' +
+                ", soyad='" + getSoyad() + '\'' +
+                ", doctor=" + (doctor != null ? doctor.getAd() + " " + doctor.getSoyad() : "Atanmadı") +
+                ", measurementCount=" + measurements.size() +
                 '}';
     }
 }
