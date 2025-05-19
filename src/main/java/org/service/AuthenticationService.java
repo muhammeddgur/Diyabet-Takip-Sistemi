@@ -1,7 +1,10 @@
 package org.service;
 
+import org.dao.DoctorDao;
+import org.dao.IDoctorDao;
 import org.dao.IUserDao;
 import org.dao.UserDao;
+import org.model.Doctor;
 import org.model.User;
 import org.util.PasswordUtil;
 import org.util.ValidationUtil;
@@ -17,10 +20,12 @@ import java.util.UUID;
 public class AuthenticationService {
 
     private final IUserDao userDao;
+    private final IDoctorDao doctorDao; // Doktor DAO'su eklendi
     private final NotificationService notificationService;
 
     public AuthenticationService() {
         this.userDao = new UserDao();
+        this.doctorDao = new DoctorDao(); // DoctorDao örneği oluşturuldu
         this.notificationService = new NotificationService();
     }
 
@@ -124,20 +129,42 @@ public class AuthenticationService {
             // Oluşturulma zamanını ayarla
             user.setCreated_at(LocalDateTime.now());
 
-            // Kullanıcıyı kaydet
-            boolean saved = userDao.save(user);
+            // Kullanıcı tipine göre farklı kayıt işlemi yap
+            if ("doktor".equals(user.getKullanici_tipi())) {
+                // Doktor ise, Doctor sınıfından bir nesne oluştur
+                Doctor doctor = new Doctor(user);
 
-            if (saved) {
-                // Hoş geldin e-postası gönder
-                notificationService.sendEmail(
-                        user.getEmail(),
-                        "Diyabet Takip Sistemine Hoş Geldiniz",
-                        "Sayın " + user.getAd() + " " + user.getSoyad() + ",\n\n" +
-                                "Diyabet Takip Sistemine kaydınız başarıyla gerçekleştirilmiştir. " +
-                                "Sisteme TC kimlik numaranız ve şifreniz ile giriş yapabilirsiniz."
-                );
+                // Doctor nesnesini kaydet (hem user hem doktor tablosuna kaydeder)
+                boolean saved = doctorDao.save(doctor);
 
-                return user;
+                if (saved) {
+                    // Hoş geldin e-postası gönder
+                    notificationService.sendEmail(
+                            doctor.getEmail(),
+                            "Diyabet Takip Sistemine Hoş Geldiniz",
+                            "Sayın " + doctor.getAd() + " " + doctor.getSoyad() + ",\n\n" +
+                                    "Diyabet Takip Sistemine doktor kaydınız başarıyla gerçekleştirilmiştir. " +
+                                    "Sisteme TC kimlik numaranız ve şifreniz ile giriş yapabilirsiniz."
+                    );
+
+                    return doctor;
+                }
+            } else {
+                // Normal kullanıcı ise standart kayıt işlemi yap
+                boolean saved = userDao.save(user);
+
+                if (saved) {
+                    // Hoş geldin e-postası gönder
+                    notificationService.sendEmail(
+                            user.getEmail(),
+                            "Diyabet Takip Sistemine Hoş Geldiniz",
+                            "Sayın " + user.getAd() + " " + user.getSoyad() + ",\n\n" +
+                                    "Diyabet Takip Sistemine kaydınız başarıyla gerçekleştirilmiştir. " +
+                                    "Sisteme TC kimlik numaranız ve şifreniz ile giriş yapabilirsiniz."
+                    );
+
+                    return user;
+                }
             }
         } catch (SQLException | NoSuchAlgorithmException e) {
             System.err.println("Kayıt işlemi sırasında bir hata oluştu: " + e.getMessage());

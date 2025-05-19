@@ -111,13 +111,11 @@ public class Patient extends User {
 
     @Override
     public String toString() {
-        return "Patient{" +
-                "patient_id=" + patient_id +
+        return  "patient_id=" + patient_id +
                 ", user_id=" + getUser_id() +
                 ", ad='" + getAd() + '\'' +
                 ", soyad='" + getSoyad() + '\'' +
                 ", doctor=" + (doctor != null ? doctor.getAd() + " " + doctor.getSoyad() : "Atanmadı") +
-                ", measurementCount=" + measurements.size() +
-                '}';
+                ", measurementCount=" + measurements.size();
     }
 }
