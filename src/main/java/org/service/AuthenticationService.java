@@ -33,20 +33,28 @@ public class AuthenticationService {
      */
     public User login(String tcKimlik, String password) {
         try {
-            // Şifreyi hashle
-            String hashedPassword = PasswordUtil.hashPassword(password);
+            // Önce kullanıcıyı TC kimlik numarasına göre bulalım
+            User user = userDao.findByTcKimlik(tcKimlik);
 
-            // Kullanıcıyı doğrula
-            User user = userDao.authenticate(tcKimlik, hashedPassword);
-
-            // Son giriş zamanını güncelle
-            if (user != null) {
-                user.setLast_login(LocalDateTime.now());
-                userDao.updateLastLogin(user.getUser_id());
+            if (user == null) {
+                System.out.println("TC Kimlik numarası ile kullanıcı bulunamadı: " + tcKimlik);
+                return null;
             }
 
+            // ✅ DOĞRU YAKLAŞIM: Girilen şifreyi ve veritabanındaki hash'i karşılaştırma
+            boolean passwordMatches = PasswordUtil.verifyPassword(password, user.getPassword());
+
+            if (!passwordMatches) {
+                System.out.println("Şifre eşleşmiyor: " + tcKimlik);
+                return null;
+            }
+
+            // Son giriş zamanını güncelle
+            user.setLast_login(LocalDateTime.now());
+            userDao.updateLastLogin(user.getUser_id());
+
             return user;
-        } catch (SQLException | NoSuchAlgorithmException e) {
+        } catch (SQLException e) {
             System.err.println("Giriş işlemi sırasında bir hata oluştu: " + e.getMessage());
             return null;
         }

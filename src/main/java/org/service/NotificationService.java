@@ -73,7 +73,7 @@ public class NotificationService {
             message.setText(body);
 
             // Mesajı gönder
-            // Transport.send(message); // Gerçek gönderim için bu satırı açın
+            Transport.send(message); // Gerçek gönderim için bu satırı açın
 
             // Şu an için simülasyon yapıyoruz
             System.out.println("E-posta gönderildi: " + to + ", Konu: " + subject);
