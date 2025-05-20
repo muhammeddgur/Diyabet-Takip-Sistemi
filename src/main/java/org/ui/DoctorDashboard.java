@@ -3,12 +3,10 @@ package org.ui;
 import org.dao.DoctorDao;
 import org.model.*;
 import org.service.*;
-import org.util.DateTimeUtil;
 import org.util.ValidationUtil;
 import org.util.PasswordUtil;
 
 import javax.swing.*;
-import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
@@ -73,7 +71,9 @@ public class DoctorDashboard extends JPanel {
     private JPasswordField passwordField;
 
     // Ölçüm ekleme form alanları
-    private JComboBox<Patient> patientCombo;
+    private JComboBox<Patient> bloodMeasurePatientCombo;
+    private JComboBox<Patient> dietPatientCombo;
+    private JComboBox<Patient> exercisePatientCombo;
     private JTextField measurementValueField;
     private JComboBox<String> periodCombo;
 
@@ -194,9 +194,9 @@ public class DoctorDashboard extends JPanel {
         formPanel.add(new JLabel("Hasta:"), gbc);
 
         gbc.gridx = 1;
-        patientCombo = new JComboBox<>();
-        updatePatientCombo();
-        formPanel.add(patientCombo, gbc);
+        bloodMeasurePatientCombo = new JComboBox<>();
+        bloodMeasurePatientCombo = updatePatientCombo(bloodMeasurePatientCombo);
+        formPanel.add(bloodMeasurePatientCombo, gbc);
 
         // Ölçüm değeri
         gbc.gridx = 0;
@@ -255,7 +255,7 @@ public class DoctorDashboard extends JPanel {
      */
     private void addMeasurement() {
         // Form kontrolü
-        if (patientCombo.getSelectedItem() == null) {
+        if (bloodMeasurePatientCombo.getSelectedItem() == null) {
             JOptionPane.showMessageDialog(this, "Lütfen bir hasta seçin!", "Form Hatası", JOptionPane.ERROR_MESSAGE);
             return;
         }
@@ -310,9 +310,10 @@ public class DoctorDashboard extends JPanel {
         formPanel.add(new JLabel("Hasta:"), gbc);
 
         gbc.gridx = 1;
-        JComboBox<Patient> patientCombo = new JComboBox<>();
-        updatePatientCombo(patientCombo);
-        formPanel.add(patientCombo, gbc);
+        dietPatientCombo = new JComboBox<>();
+        dietPatientCombo = updatePatientCombo(dietPatientCombo);
+        formPanel.add(dietPatientCombo, gbc);
+
 
         // Diyet tipi seçimi
         gbc.gridx = 0;
@@ -389,9 +390,9 @@ public class DoctorDashboard extends JPanel {
         formPanel.add(new JLabel("Hasta:"), gbc);
 
         gbc.gridx = 1;
-        JComboBox<Patient> patientCombo = new JComboBox<>();
-        updatePatientCombo(patientCombo);
-        formPanel.add(patientCombo, gbc);
+        exercisePatientCombo = new JComboBox<>();
+        exercisePatientCombo = updatePatientCombo(exercisePatientCombo);
+        formPanel.add(exercisePatientCombo, gbc);
 
         // Egzersiz tipi seçimi
         gbc.gridx = 0;
@@ -451,21 +452,12 @@ public class DoctorDashboard extends JPanel {
     /**
      * Hasta combo box'ını günceller
      */
-    private void updatePatientCombo() {
-        patientCombo.removeAllItems();
-        for (Patient patient : allPatients) {
-            patientCombo.addItem(patient);
-        }
-    }
-
-    /**
-     * Hasta combo box'ını günceller
-     */
-    private void updatePatientCombo(JComboBox<Patient> combo) {
+    private JComboBox<Patient> updatePatientCombo(JComboBox<Patient> combo) {
         combo.removeAllItems();
         for (Patient patient : allPatients) {
             combo.addItem(patient);
         }
+        return combo;
     }
 
     private JPanel createPatientListPanel() {
@@ -1009,8 +1001,18 @@ public class DoctorDashboard extends JPanel {
 
         updatePatientTable(filteredPatients);
 
-        // Hasta combo box'ını güncelle
-        updatePatientCombo();
+        // Hasta combo box'larını güncelle
+        if(bloodMeasurePatientCombo != null) {
+            bloodMeasurePatientCombo = updatePatientCombo(bloodMeasurePatientCombo);
+        }
+
+        if (dietPatientCombo != null) {
+            dietPatientCombo = updatePatientCombo(dietPatientCombo);
+        }
+
+        if (exercisePatientCombo != null) {
+            exercisePatientCombo = updatePatientCombo(exercisePatientCombo);
+        }
     }
 
     /**
