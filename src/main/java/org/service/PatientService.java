@@ -9,8 +9,10 @@ import org.dao.IUserDao;
 import org.model.Doctor;
 import org.model.Patient;
 import org.model.User;
+import org.util.PasswordUtil;
 import org.util.ValidationUtil;
 
+import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -90,6 +92,18 @@ public class PatientService {
             if (patient.getDoctor() == null || patient.getDoctor().getDoctor_id() == null) {
                 System.err.println("Hastanın bir doktoru olmalıdır.");
                 return null;
+            }
+
+            // *** BU NOKTAYA EKLEYIN - Şifre hashleme kodu ***
+            if (!patient.getPassword().startsWith("$2a$")) {
+                try {
+                    String hashedPassword = PasswordUtil.hashPassword(patient.getPassword());
+                    patient.setPassword(hashedPassword);
+                    System.out.println("Hasta şifresi hashlendi: " + patient.getTc_kimlik());
+                } catch (NoSuchAlgorithmException e) {
+                    System.err.println("Şifre hashleme sırasında bir hata oluştu: " + e.getMessage());
+                    return null;
+                }
             }
 
             // Oluşturulma zamanını ayarla
@@ -208,6 +222,21 @@ public class PatientService {
         } catch (SQLException e) {
             System.err.println("Doktorun hastaları getirilirken bir hata oluştu: " + e.getMessage());
             return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Kullanıcı ID'sine göre hasta bilgisini getirir.
+     *
+     * @param userId Kullanıcı ID'si
+     * @return Hasta bilgisi veya null
+     */
+    public Patient getPatientByUserId(Integer userId) {
+        try {
+            return patientDao.findByUserId(userId);
+        } catch (SQLException e) {
+            System.err.println("Kullanıcı ID'sine göre hasta bilgisi getirme sırasında bir hata oluştu: " + e.getMessage());
+            return null;
         }
     }
 }
