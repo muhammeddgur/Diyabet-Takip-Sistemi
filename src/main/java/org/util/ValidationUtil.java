@@ -123,7 +123,6 @@ public class ValidationUtil {
 
     /**
      * Kan şekeri değerinin geçerli aralıkta olup olmadığını kontrol eder.
-     * Normal aralık: 30 - 600 mg/dL
      *
      * @param value Kan şekeri değeri
      * @return Geçerli aralıkta ise true, değilse false

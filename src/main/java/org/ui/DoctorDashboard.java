@@ -15,7 +15,9 @@ import java.awt.*;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -66,7 +68,7 @@ public class DoctorDashboard extends JPanel {
     private JTextField adField;
     private JTextField soyadField;
     private JTextField emailField;
-    private JTextField yasField;
+    private JSpinner dogumTarihiSpinner;
     private JComboBox<String> cinsiyetCombo;
     private JPasswordField passwordField;
 
@@ -1119,14 +1121,20 @@ public class DoctorDashboard extends JPanel {
         passwordField = new JPasswordField(15);
         panel.add(passwordField, gbc);
 
-        // Yaş
+        // Doğum Tarihi
         gbc.gridx = 0;
         gbc.gridy = 5;
-        panel.add(new JLabel("Yaş:"), gbc);
+        panel.add(new JLabel("Doğum Tarihi:"), gbc);
 
         gbc.gridx = 1;
-        yasField = new JTextField(15);
-        panel.add(yasField, gbc);
+        // Bugünün tarihinden 30 yıl öncesi varsayılan değer olarak
+        Date defaultDate = new Date();
+        defaultDate.setYear(defaultDate.getYear() - 30);
+
+        SpinnerDateModel dateModel = new SpinnerDateModel(defaultDate, null, new Date(), java.util.Calendar.DAY_OF_MONTH);
+        dogumTarihiSpinner = new JSpinner(dateModel);
+        dogumTarihiSpinner.setEditor(new JSpinner.DateEditor(dogumTarihiSpinner, "dd.MM.yyyy"));
+        panel.add(dogumTarihiSpinner, gbc);
 
         // Cinsiyet
         gbc.gridx = 0;
@@ -1157,12 +1165,15 @@ public class DoctorDashboard extends JPanel {
         String soyad = soyadField.getText();
         String email = emailField.getText();
         String password = new String(passwordField.getPassword());
-        String yasStr = yasField.getText();
         String cinsiyet = cinsiyetCombo.getSelectedItem().toString().substring(0, 1); // E veya K
+
+        // Doğum tarihini al (JSpinner'dan Date olarak alınır, LocalDate'e çevrilir)
+        Date spinnerDate = (Date) dogumTarihiSpinner.getValue();
+        LocalDate dogumTarihi = spinnerDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 
         // Validasyon kontrolleri
         if (tcKimlik.isEmpty() || ad.isEmpty() || soyad.isEmpty() ||
-                email.isEmpty() || password.isEmpty() || yasStr.isEmpty()) {
+                email.isEmpty() || password.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Tüm alanlar doldurulmalıdır!",
                     "Form Hatası",
@@ -1197,27 +1208,13 @@ public class DoctorDashboard extends JPanel {
             return;
         }
 
-        // Yaş doğrulama
-        int yas;
-        try {
-            yas = Integer.parseInt(yasStr);
-            if (yas <= 0 || yas > 120) {
-                throw new NumberFormatException();
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Yaş değeri geçerli bir sayı olmalıdır (1-120 arası)!",
-                    "Doğrulama Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
         // Patient nesnesi oluştur
         Patient patient = new Patient();
         patient.setTc_kimlik(tcKimlik);
         patient.setAd(ad);
         patient.setSoyad(soyad);
         patient.setEmail(email);
+        patient.setDogum_tarihi(dogumTarihi);  // Doğum tarihini ekledik
 
         // Şifreyi hashle
         try {
@@ -1233,11 +1230,6 @@ public class DoctorDashboard extends JPanel {
 
         patient.setCinsiyet(cinsiyet.charAt(0));
         patient.setKullanici_tipi("hasta"); // Hasta kaydı
-
-        // Yaştan doğum tarihini hesapla ve ayarla
-        LocalDate bugun = DateTimeUtil.getCurrentDate();
-        LocalDate dogumTarihi = bugun.minusYears(yas);
-        patient.setDogum_tarihi(dogumTarihi);
 
         // DoctorDao kullanarak mevcut kullanıcının doktor nesnesini bul
         try {
@@ -1262,7 +1254,7 @@ public class DoctorDashboard extends JPanel {
         }
 
         // Kayıt işlemini gerçekleştir
-        Patient addedPatient = patientService.addPatient(patient);
+        Patient addedPatient = patientService.addPatient(patient,password);
 
         if (addedPatient != null) {
             JOptionPane.showMessageDialog(this,
@@ -1287,7 +1279,6 @@ public class DoctorDashboard extends JPanel {
         soyadField.setText("");
         emailField.setText("");
         passwordField.setText("");
-        yasField.setText("");
         cinsiyetCombo.setSelectedIndex(0);
     }
 

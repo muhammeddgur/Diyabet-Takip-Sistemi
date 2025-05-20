@@ -56,7 +56,7 @@ public class PatientService {
      * @param patient Eklenecek hasta bilgileri
      * @return İşlem başarılı ise eklenen hasta, değilse null
      */
-    public Patient addPatient(Patient patient) {
+    public Patient addPatient(Patient patient,String tempUnhashedPassword) {
         try {
             // TC kimlik formatını doğrula
             if (!ValidationUtil.validateTcKimlik(patient.getTc_kimlik())) {
@@ -120,11 +120,12 @@ public class PatientService {
                         "Diyabet Takip Sistemine Hoş Geldiniz",
                         "Sayın " + patient.getAd() + " " + patient.getSoyad() + ",\n\n" +
                                 "Diyabet Takip Sistemine kaydınız başarıyla gerçekleştirilmiştir. " +
-                                "Sisteme TC kimlik numaranız ve şifreniz ile giriş yapabilirsiniz."
-                );
+                                "Sisteme TC kimlik numaranız ve şifreniz ile giriş yapabilirsiniz." +
+                                "\n\nŞifreniz: " + tempUnhashedPassword);
 
                 return patient;
             }
+
         } catch (SQLException e) {
             System.err.println("Hasta ekleme sırasında bir hata oluştu: " + e.getMessage());
         }
