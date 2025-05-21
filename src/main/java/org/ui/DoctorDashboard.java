@@ -1,8 +1,10 @@
 package org.ui;
 
 import org.dao.DoctorDao;
+import org.dao.MeasurementDao;
 import org.model.*;
 import org.service.*;
+import org.util.DateTimeUtil;
 import org.util.ValidationUtil;
 import org.util.PasswordUtil;
 
@@ -253,6 +255,7 @@ public class DoctorDashboard extends JPanel {
     /**
      * Ölçüm ekleme işlemini gerçekleştirir
      */
+    //Kan şekeri ölçüm değerleri tabloya burada kaydedilir
     private void addMeasurement() {
         // Form kontrolü
         if (bloodMeasurePatientCombo.getSelectedItem() == null) {
@@ -271,12 +274,38 @@ public class DoctorDashboard extends JPanel {
             if (value <= 0 || value >= 1000) {
                 throw new NumberFormatException();
             }
+            // Seçili hastayı al
+            Patient selectedPatient = (Patient) bloodMeasurePatientCombo.getSelectedItem();
+            String periodText = (String) periodCombo.getSelectedItem();
 
-            // Ölçüm işlemi burada gerçekleştirilecek
-            JOptionPane.showMessageDialog(this,
-                    "Ölçüm kaydedildi. Bu özellik henüz tam olarak uygulanmamıştır.",
-                    "İşlem Tamamlandı",
-                    JOptionPane.INFORMATION_MESSAGE);
+            // Ölçüm nesnesi oluştur
+            BloodSugarMeasurement measurement = new BloodSugarMeasurement();
+            measurement.setPatient_id(selectedPatient.getPatient_id());
+            measurement.setOlcum_degeri(value);
+            measurement.setOlcum_zamani(periodText);
+            measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime()); // Şu anki tarih ve saat
+            Double tempInsulin;
+
+            measurement.setInsulin_miktari(0.0);
+
+            //Service aracılığıyla Dao kullanarak tabloya ekler
+            boolean success = measurementService.addMeasurement(measurement);
+
+            if (success) {
+                JOptionPane.showMessageDialog(this,
+                        "Kan şekeri ölçümü başarıyla kaydedildi.",
+                        "İşlem Başarılı",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                // Form alanlarını temizle
+                measurementValueField.setText("");
+                periodCombo.setSelectedIndex(0);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Ölçüm kaydedilirken bir hata oluştu.",
+                        "Kayıt Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+            }
 
             // Form alanlarını temizle
             measurementValueField.setText("");
@@ -528,10 +557,10 @@ public class DoctorDashboard extends JPanel {
         gbc.gridx = 1;
         bloodLevelFilterCombo = new JComboBox<>(new String[] {
                 "Tümü",
-                "Düşük (70 mg/dL altı)",
-                "Normal (70-140 mg/dL)",
-                "Yüksek (140-180 mg/dL)",
-                "Çok Yüksek (180 mg/dL üstü)"
+                "Düşük-Hipoglisemi (70 mg/dL altı)",
+                "Normal (70-99 mg/dL)",
+                "Orta-Prediyabet (100-125 mg/dL)",
+                "Yüksek-Diyabet (126 mg/dL üstü)"
         });
         filterPanel.add(bloodLevelFilterCombo, gbc);
 

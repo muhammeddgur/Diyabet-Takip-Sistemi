@@ -70,7 +70,7 @@ public class MeasurementDao implements IMeasurementDao {
             try (Connection conn = connectionManager.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-                stmt.setInt(1, measurement.getPatient().getPatient_id());
+                stmt.setInt(1, measurement.getPatient_id());
                 stmt.setInt(2, measurement.getOlcum_degeri());
                 stmt.setString(3, measurement.getOlcum_zamani());
                 stmt.setTimestamp(4, Timestamp.valueOf(measurement.getOlcum_tarihi()));

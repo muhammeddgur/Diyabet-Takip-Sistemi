@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 public class BloodSugarMeasurement {
     private Integer measurement_id;
+    private Integer patient_id;
     private Patient patient;
     private Integer olcum_degeri;
     private String olcum_zamani;
@@ -30,6 +31,13 @@ public class BloodSugarMeasurement {
         this.measurement_id = measurement_id;
     }
 
+    public Integer getPatient_id() {
+        return patient_id;
+    }
+    public void setPatient_id(Integer patient_id) {
+        this.patient_id = patient_id;
+    }
+
     public Patient getPatient() {
         return patient;
     }
@@ -51,13 +59,22 @@ public class BloodSugarMeasurement {
     }
 
     public void setOlcum_zamani(String olcum_zamani) {
+        String timekey = "";
         // Olçum zamanının geçerli olduğundan emin olalım
-        if (!olcum_zamani.equals("sabah") && !olcum_zamani.equals("ogle") &&
-                !olcum_zamani.equals("ikindi") && !olcum_zamani.equals("aksam") &&
-                !olcum_zamani.equals("gece")) {
+        if(olcum_zamani.contains("Sabah"))
+            timekey = "sabah";
+        else if(olcum_zamani.contains("Öğle"))
+            timekey = "ogle";
+        else if(olcum_zamani.contains("İkindi"))
+            timekey = "ikindi";
+        else if(olcum_zamani.contains("Akşam"))
+            timekey = "aksam";
+        else if(olcum_zamani.contains("Gece"))
+            timekey = "gece";
+        else
             throw new IllegalArgumentException("Geçersiz ölçüm zamanı. Geçerli değerler: sabah, ogle, ikindi, aksam, gece");
-        }
-        this.olcum_zamani = olcum_zamani;
+
+        this.olcum_zamani = timekey;
     }
 
     public LocalDateTime getOlcum_tarihi() {

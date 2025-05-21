@@ -40,7 +40,7 @@ public class MeasurementService {
 
             // Kan şekeri değerini doğrula
             if (!ValidationUtil.validateBloodSugar(measurement.getOlcum_degeri())) {
-                System.err.println("Geçersiz kan şekeri değeri. Değer 30 ile 600 mg/dL arasında olmalıdır.");
+                System.err.println("Geçersiz kan şekeri değeri. Değer 0 ile 1000 mg/dL arasında olmalıdır.");
                 return false;
             }
 
