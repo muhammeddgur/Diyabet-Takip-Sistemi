@@ -64,8 +64,8 @@ public class MeasurementDao implements IMeasurementDao {
     public boolean save(BloodSugarMeasurement measurement) throws SQLException {
         if (measurement.getMeasurement_id() == null) {
             // Insert
-            String sql = "INSERT INTO blood_sugar_measurements (patient_id, olcum_degeri, olcum_zamani, olcum_tarihi, insülin_miktari) " +
-                    "VALUES (?, ?, ?, ?, ?) RETURNING measurement_id";
+            String sql = "INSERT INTO blood_sugar_measurements (patient_id, olcum_degeri, olcum_zamani, olcum_tarihi, insülin_miktari, is_valid_time, category_id) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING measurement_id";
 
             try (Connection conn = connectionManager.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -81,6 +81,14 @@ public class MeasurementDao implements IMeasurementDao {
                     stmt.setNull(5, Types.NUMERIC);
                 }
 
+                stmt.setBoolean(6, measurement.getIs_valid_time());
+
+                if (measurement.getCategory_id() != null) {
+                    stmt.setInt(7, measurement.getCategory_id());
+                } else {
+                    stmt.setNull(7, Types.INTEGER);
+                }
+
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
                         measurement.setMeasurement_id(rs.getInt(1));
@@ -91,12 +99,12 @@ public class MeasurementDao implements IMeasurementDao {
         } else {
             // Update
             String sql = "UPDATE blood_sugar_measurements SET patient_id = ?, olcum_degeri = ?, olcum_zamani = ?, " +
-                    "olcum_tarihi = ?, insülin_miktari = ? WHERE measurement_id = ?";
+                    "olcum_tarihi = ?, insülin_miktari = ?, is_valid_time = ?, category_id = ? WHERE measurement_id = ?";
 
             try (Connection conn = connectionManager.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-                stmt.setInt(1, measurement.getPatient().getPatient_id());
+                stmt.setInt(1, measurement.getPatient_id());
                 stmt.setInt(2, measurement.getOlcum_degeri());
                 stmt.setString(3, measurement.getOlcum_zamani());
                 stmt.setTimestamp(4, Timestamp.valueOf(measurement.getOlcum_tarihi()));
@@ -107,7 +115,15 @@ public class MeasurementDao implements IMeasurementDao {
                     stmt.setNull(5, Types.NUMERIC);
                 }
 
-                stmt.setInt(6, measurement.getMeasurement_id());
+                stmt.setBoolean(6, measurement.getIs_valid_time());
+
+                if (measurement.getCategory_id() != null) {
+                    stmt.setInt(7, measurement.getCategory_id());
+                } else {
+                    stmt.setNull(7, Types.INTEGER);
+                }
+
+                stmt.setInt(8, measurement.getMeasurement_id());
 
                 int affectedRows = stmt.executeUpdate();
                 return affectedRows > 0;
@@ -206,8 +222,9 @@ public class MeasurementDao implements IMeasurementDao {
 
     @Override
     public double getDailyAverage(Integer patientId, LocalDate date) throws SQLException {
+        // Sadece geçerli saatlerde yapılan ölçümleri ortalamaya dahil et
         String sql = "SELECT AVG(olcum_degeri) FROM blood_sugar_measurements WHERE patient_id = ? " +
-                "AND olcum_tarihi >= ? AND olcum_tarihi < ?";
+                "AND olcum_tarihi >= ? AND olcum_tarihi < ? AND is_valid_time = TRUE";
         double average = 0;
 
         try (Connection conn = connectionManager.getConnection();
@@ -251,6 +268,62 @@ public class MeasurementDao implements IMeasurementDao {
         return measurements;
     }
 
+    /**
+     * Geçerli saatlerde yapılan ölçümleri getirir
+     * @param patientId Hasta ID
+     * @return Geçerli saatlerde yapılan ölçümler
+     * @throws SQLException
+     */
+    public List<BloodSugarMeasurement> getValidTimeMeasurements(Integer patientId) throws SQLException {
+        String sql = "SELECT * FROM blood_sugar_measurements WHERE patient_id = ? AND is_valid_time = TRUE ORDER BY olcum_tarihi DESC";
+        List<BloodSugarMeasurement> measurements = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, patientId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    BloodSugarMeasurement measurement = mapResultSetToMeasurement(rs);
+                    if (measurement != null) {
+                        measurements.add(measurement);
+                    }
+                }
+            }
+        }
+
+        return measurements;
+    }
+
+    /**
+     * Geçersiz saatlerde yapılan ölçümleri getirir
+     * @param patientId Hasta ID
+     * @return Geçersiz saatlerde yapılan ölçümler
+     * @throws SQLException
+     */
+    public List<BloodSugarMeasurement> getInvalidTimeMeasurements(Integer patientId) throws SQLException {
+        String sql = "SELECT * FROM blood_sugar_measurements WHERE patient_id = ? AND is_valid_time = FALSE ORDER BY olcum_tarihi DESC";
+        List<BloodSugarMeasurement> measurements = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, patientId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    BloodSugarMeasurement measurement = mapResultSetToMeasurement(rs);
+                    if (measurement != null) {
+                        measurements.add(measurement);
+                    }
+                }
+            }
+        }
+
+        return measurements;
+    }
+
     // ResultSet'ten BloodSugarMeasurement nesnesine dönüştürme yardımcı metodu
     private BloodSugarMeasurement mapResultSetToMeasurement(ResultSet rs) throws SQLException {
         BloodSugarMeasurement measurement = new BloodSugarMeasurement();
@@ -264,8 +337,18 @@ public class MeasurementDao implements IMeasurementDao {
             measurement.setInsulin_miktari(insulin);
         }
 
+        // is_valid_time değerini oku
+        measurement.setIs_valid_time(rs.getBoolean("is_valid_time"));
+
+        // category_id değerini oku
+        Integer categoryId = rs.getInt("category_id");
+        if (!rs.wasNull()) {
+            measurement.setCategory_id(categoryId);
+        }
+
         // Hasta bilgisini ekle
         int patientId = rs.getInt("patient_id");
+        measurement.setPatient_id(patientId);
         Patient patient = patientDao.findById(patientId);
         if (patient != null) {
             measurement.setPatient(patient);

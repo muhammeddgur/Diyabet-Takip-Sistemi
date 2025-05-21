@@ -19,6 +19,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Doktor kontrol paneli
@@ -34,6 +35,8 @@ public class DoctorDashboard extends JPanel {
     private InsulinRecommendationService insulinRecommendationService;
     private RecommendationService recommendationService;
     private MainFrame parent;
+    private SymptomService symptomService;
+
 
     // Kart layout ve panel referansları
     private CardLayout cardLayout;
@@ -79,6 +82,7 @@ public class DoctorDashboard extends JPanel {
     private JTextField measurementValueField;
     private JComboBox<String> periodCombo;
 
+
     // Hasta verileri
     private List<Patient> allPatients;
     private List<Patient> filteredPatients;
@@ -92,6 +96,7 @@ public class DoctorDashboard extends JPanel {
         this.exerciseService = new org.service.ExerciseService();
         this.insulinRecommendationService = new org.service.InsulinRecommendationService();
         this.recommendationService = new org.service.RecommendationService();
+        this.symptomService = new SymptomService();
         this.parent = parent;
         this.allPatients = new ArrayList<>();
         this.filteredPatients = new ArrayList<>();
@@ -876,10 +881,267 @@ public class DoctorDashboard extends JPanel {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
+        // Belirti ekleme formu
+        JPanel formPanel = new JPanel(new GridBagLayout());
+        formPanel.setBorder(BorderFactory.createTitledBorder("Belirti Ekle/Düzenle"));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 5, 5, 5);
+
+        // Belirti tipi
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        formPanel.add(new JLabel("Belirti Tipi:"), gbc);
+
+        gbc.gridx = 1;
+        String[] symptomTypes = {"Poliüri (Sık idrara çıkma)", "Polifaji (Aşırı açlık hissi)",
+                "Polidipsi (Aşırı susama hissi)", "Nöropati (El ve ayaklarda uyuşma)",
+                "Kilo kaybı", "Yorgunluk", "Yaraların yavaş iyileşmesi", "Bulanık görme", "Diğer"};
+        JComboBox<String> symptomTypeCombo = new JComboBox<>(symptomTypes);
+        formPanel.add(symptomTypeCombo, gbc);
+
+        // Başlangıç tarihi
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        formPanel.add(new JLabel("Başlangıç Tarihi:"), gbc);
+
+        gbc.gridx = 1;
+        // Güncel tarihi varsayılan değer olarak ayarla, DateTimeUtil kullanarak
+        SpinnerDateModel dateModel = new SpinnerDateModel();
+        // Güncel tarih için DateTimeUtil kullan
+        Date currentDate = Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant());
+        dateModel.setValue(currentDate);
+
+        JSpinner startDateSpinner = new JSpinner(dateModel);
+        startDateSpinner.setEditor(new JSpinner.DateEditor(startDateSpinner, "dd.MM.yyyy"));
+        ((JSpinner.DefaultEditor)startDateSpinner.getEditor()).getTextField().setEditable(false);
+        formPanel.add(startDateSpinner, gbc);
+
+        // Notlar/Açıklama
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        formPanel.add(new JLabel("Açıklama:"), gbc);
+
+        gbc.gridx = 1;
+        JTextArea notesArea = new JTextArea(3, 20);
+        notesArea.setLineWrap(true);
+        notesArea.setWrapStyleWord(true);
+        JScrollPane notesScroll = new JScrollPane(notesArea);
+        formPanel.add(notesScroll, gbc);
+
+        // ID alanı (gizli)
+        final JTextField patientSymptomIdField = new JTextField();
+        patientSymptomIdField.setVisible(false);
+        formPanel.add(patientSymptomIdField, gbc);
+
+        // Butonlar
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 2;
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+
+        JButton addButton = new JButton("Belirti Ekle");
+        addButton.addActionListener(e -> {
+            // Hasta kontrolü
+            if (selectedPatient == null) {
+                JOptionPane.showMessageDialog(panel,
+                        "Lütfen önce bir hasta seçin.",
+                        "Hasta Seçilmedi",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Form verilerini al
+            String symptomName = symptomTypeCombo.getSelectedItem().toString();
+            Date startDate = (Date) startDateSpinner.getValue();
+            String notes = notesArea.getText();
+
+            // Tarihi LocalDate'e dönüştür - DateTimeUtil kullanarak
+            LocalDate reportDate = startDate.toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+
+            // Belirtiyi ekle
+            boolean success = symptomService.addSymptomToPatientByName(
+                    selectedPatient.getPatient_id(),
+                    symptomName,
+                    notes,
+                    reportDate
+            );
+
+            if (success) {
+                JOptionPane.showMessageDialog(panel,
+                        "Belirti başarıyla eklendi.",
+                        "İşlem Başarılı",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                // Formu temizle
+                symptomTypeCombo.setSelectedIndex(0);
+                startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
+                notesArea.setText("");
+                patientSymptomIdField.setText("");
+
+                // Belirti tablosunu güncelle
+                refreshSymptomsList((JTable) ((JScrollPane) panel.getComponent(1)).getViewport().getView());
+            } else {
+                JOptionPane.showMessageDialog(panel,
+                        "Belirti eklenirken bir hata oluştu.",
+                        "İşlem Başarısız",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        buttonPanel.add(addButton);
+
+        JButton updateButton = new JButton("Güncelle");
+        updateButton.addActionListener(e -> {
+            // Hasta kontrolü
+            if (selectedPatient == null) {
+                JOptionPane.showMessageDialog(panel,
+                        "Lütfen önce bir hasta seçin.",
+                        "Hasta Seçilmedi",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Seçilen belirti kontrolü
+            String idText = patientSymptomIdField.getText();
+            if (idText == null || idText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel,
+                        "Lütfen önce güncellenecek bir belirti seçin.",
+                        "Belirti Seçilmedi",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            try {
+                // Form verilerini al
+                Integer patientSymptomId = Integer.parseInt(idText);
+                String symptomName = symptomTypeCombo.getSelectedItem().toString();
+                Date startDate = (Date) startDateSpinner.getValue();
+                String notes = notesArea.getText();
+
+                // Tarihi LocalDate'e dönüştür - DateTimeUtil kullanarak
+                LocalDate reportDate = startDate.toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate();
+
+                // Önce belirti adına göre belirti ID'sini bul
+                Symptom symptom = symptomService.createOrGetSymptom(symptomName, notes);
+
+                // Belirtiyi güncelle
+                boolean success = symptomService.updatePatientSymptom(
+                        patientSymptomId,
+                        symptom.getSymptom_id(),
+                        reportDate
+                );
+
+                if (success) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Belirti başarıyla güncellendi.",
+                            "İşlem Başarılı",
+                            JOptionPane.INFORMATION_MESSAGE);
+
+                    // Formu temizle
+                    symptomTypeCombo.setSelectedIndex(0);
+                    startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
+                    notesArea.setText("");
+                    patientSymptomIdField.setText("");
+
+                    // Belirti tablosunu güncelle
+                    refreshSymptomsList((JTable) ((JScrollPane) panel.getComponent(1)).getViewport().getView());
+                } else {
+                    JOptionPane.showMessageDialog(panel,
+                            "Belirti güncellenirken bir hata oluştu.",
+                            "İşlem Başarısız",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(panel,
+                        "Geçersiz belirti ID'si.",
+                        "Hata",
+                        JOptionPane.ERROR_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(panel,
+                        "İşlem sırasında bir hata oluştu: " + ex.getMessage(),
+                        "Hata",
+                        JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
+        });
+        buttonPanel.add(updateButton);
+
+        JButton deleteButton = new JButton("Sil");
+        deleteButton.addActionListener(e -> {
+            // Seçilen belirti kontrolü
+            String idText = patientSymptomIdField.getText();
+            if (idText == null || idText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel,
+                        "Lütfen önce silinecek bir belirti seçin.",
+                        "Belirti Seçilmedi",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Silme onayı
+            int confirm = JOptionPane.showConfirmDialog(panel,
+                    "Seçili belirtiyi silmek istediğinizden emin misiniz?",
+                    "Silme Onayı",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
+            }
+
+            try {
+                Integer patientSymptomId = Integer.parseInt(idText);
+                boolean success = symptomService.deletePatientSymptom(patientSymptomId);
+
+                if (success) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Belirti başarıyla silindi.",
+                            "İşlem Başarılı",
+                            JOptionPane.INFORMATION_MESSAGE);
+
+                    // Formu temizle
+                    symptomTypeCombo.setSelectedIndex(0);
+                    startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
+                    notesArea.setText("");
+                    patientSymptomIdField.setText("");
+
+                    // Belirti tablosunu güncelle
+                    refreshSymptomsList((JTable) ((JScrollPane) panel.getComponent(1)).getViewport().getView());
+                } else {
+                    JOptionPane.showMessageDialog(panel,
+                            "Belirti silinirken bir hata oluştu.",
+                            "İşlem Başarısız",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(panel,
+                        "Geçersiz belirti ID'si.",
+                        "Hata",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        buttonPanel.add(deleteButton);
+
+        JButton clearButton = new JButton("Temizle");
+        clearButton.addActionListener(e -> {
+            // Formu temizle
+            symptomTypeCombo.setSelectedIndex(0);
+            startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
+            notesArea.setText("");
+            patientSymptomIdField.setText("");
+        });
+        buttonPanel.add(clearButton);
+
+        formPanel.add(buttonPanel, gbc);
+
         // Belirti grafik alanı
         JPanel chartPanel = new JPanel(new BorderLayout());
         chartPanel.setBorder(BorderFactory.createTitledBorder("Belirtilerin Zamana Göre Dağılımı"));
-        chartPanel.setPreferredSize(new Dimension(600, 300));
+        chartPanel.setPreferredSize(new Dimension(600, 200));
 
         // Bilgilendirme etiketi
         JLabel chartInfoLabel = new JLabel("<html><center>Bu alanda hastanın belirtilerinin zaman içindeki dağılımını<br>" +
@@ -888,18 +1150,134 @@ public class DoctorDashboard extends JPanel {
         chartInfoLabel.setForeground(Color.GRAY);
         chartPanel.add(chartInfoLabel, BorderLayout.CENTER);
 
-        panel.add(chartPanel, BorderLayout.CENTER);
+        // Formu ve grafiği üst panele ekle
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(formPanel, BorderLayout.NORTH);
+        topPanel.add(chartPanel, BorderLayout.CENTER);
 
-        // Belirtiler tablosu
-        String[] columns = {"Tarih", "Belirti", "Şiddeti", "Açıklama"};
-        DefaultTableModel model = new DefaultTableModel(columns, 0);
+        panel.add(topPanel, BorderLayout.NORTH);
+
+        // Belirtiler tablosu - Şiddet sütunu kaldırıldı
+        String[] columns = {"ID", "Tarih", "Belirti", "Açıklama"};
+        DefaultTableModel model = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // Tabloyu salt okunur yap
+            }
+        };
         JTable symptomsTable = new JTable(model);
+        symptomsTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting() && symptomsTable.getSelectedRow() != -1) {
+                // Seçilen belirtiyi form alanlarına yükle
+                int selectedRow = symptomsTable.getSelectedRow();
+
+                // Görünmeyen ID sütunundaki değeri al
+                String id = symptomsTable.getValueAt(selectedRow, 0).toString();
+                patientSymptomIdField.setText(id);
+
+                // Diğer değerleri al ve form alanlarını doldur
+                String tarih = symptomsTable.getValueAt(selectedRow, 1).toString();
+                String belirti = symptomsTable.getValueAt(selectedRow, 2).toString();
+                String aciklama = symptomsTable.getValueAt(selectedRow, 3).toString();
+
+                // Belirti tipi combo box'ını ayarla
+                for (int i = 0; i < symptomTypeCombo.getItemCount(); i++) {
+                    if (symptomTypeCombo.getItemAt(i).toString().equals(belirti)) {
+                        symptomTypeCombo.setSelectedIndex(i);
+                        break;
+                    }
+                }
+
+                // Tarih ve açıklama alanlarını ayarla
+                try {
+                    // DateTimeUtil kullanarak tarih işlemi
+                    LocalDate date = DateTimeUtil.parseDate(tarih);
+                    if (date != null) {
+                        Date javaDate = Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                        startDateSpinner.setValue(javaDate);
+                    }
+                } catch (Exception ex) {
+                    System.err.println("Tarih dönüştürme hatası: " + ex.getMessage());
+                }
+
+                notesArea.setText(aciklama);
+            }
+        });
+
+        // İlk sütunu (ID) gizle
+        symptomsTable.getColumnModel().getColumn(0).setMinWidth(0);
+        symptomsTable.getColumnModel().getColumn(0).setMaxWidth(0);
+        symptomsTable.getColumnModel().getColumn(0).setWidth(0);
+
         JScrollPane scrollPane = new JScrollPane(symptomsTable);
         scrollPane.setBorder(BorderFactory.createTitledBorder("Belirtilen Semptomlar"));
 
-        panel.add(scrollPane, BorderLayout.SOUTH);
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        // İşlem sonuç paneli
+        JPanel statusPanel = new JPanel(new BorderLayout());
+        JLabel statusLabel = new JLabel("Hasta belirtileri doktor tarafından buradan yönetilebilir.");
+        statusPanel.add(statusLabel, BorderLayout.WEST);
+
+        JButton refreshButton = new JButton("Belirtileri Yenile");
+        refreshButton.addActionListener(e -> refreshSymptomsList(symptomsTable));
+        JPanel refreshPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        refreshPanel.add(refreshButton);
+        statusPanel.add(refreshPanel, BorderLayout.EAST);
+
+        panel.add(statusPanel, BorderLayout.SOUTH);
 
         return panel;
+    }
+
+    /**
+     * Belirtiler tablosunu yeniler - DateTimeUtil kullanarak
+     * Şiddet sütunu kaldırıldı
+     */
+    private void refreshSymptomsList(JTable symptomsTable) {
+        if (selectedPatient == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Lütfen önce bir hasta seçin.",
+                    "Hasta Seçilmedi",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            // Hastanın belirti detaylarını al
+            List<Map<String, Object>> symptomDetails =
+                    symptomService.getPatientSymptomDetails(selectedPatient.getPatient_id());
+
+            DefaultTableModel model = (DefaultTableModel) symptomsTable.getModel();
+            model.setRowCount(0); // Tabloyu temizle
+
+            for (Map<String, Object> detail : symptomDetails) {
+                Object[] row = new Object[4]; // Şiddet kaldırıldı, şimdi 4 sütun var
+                row[0] = detail.get("patientSymptomId");
+
+                // Tarihi formatla - DateTimeUtil kullanarak
+                LocalDate reportDate = (LocalDate) detail.get("reportDate");
+                row[1] = DateTimeUtil.formatDate(reportDate); // DateTimeUtil kullanımı
+
+                row[2] = detail.get("symptomName");
+                row[3] = detail.get("description");
+
+                model.addRow(row);
+            }
+
+            if (symptomDetails.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "Bu hastaya ait kayıtlı belirti bulunamadı.",
+                        "Bilgi",
+                        JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                    "Belirtiler yüklenirken bir hata oluştu: " + e.getMessage(),
+                    "Hata",
+                    JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
+        }
     }
 
     // Uyarılar paneli - Hastaların güne göre uyarıları

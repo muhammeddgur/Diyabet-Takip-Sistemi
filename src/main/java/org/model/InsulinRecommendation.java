@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 
 public class InsulinRecommendation {
     private Integer recommendation_id;
+    private Integer patient_id; // Patient ID alanı eklendi
     private Patient patient;
     private LocalDate recommendation_date;
     private Double averageValue;
@@ -21,6 +22,9 @@ public class InsulinRecommendation {
 
     public InsulinRecommendation(Patient patient, Double averageValue, Integer measuredCount, Double recommendedInsulin) {
         this.patient = patient;
+        if (patient != null) {
+            this.patient_id = patient.getPatient_id();
+        }
         this.recommendation_date = LocalDate.now();
         this.averageValue = averageValue;
         this.measuredCount = measuredCount;
@@ -38,12 +42,23 @@ public class InsulinRecommendation {
         this.recommendation_id = recommendation_id;
     }
 
+    public Integer getPatient_id() {
+        return patient_id;
+    }
+
+    public void setPatient_id(Integer patient_id) {
+        this.patient_id = patient_id;
+    }
+
     public Patient getPatient() {
         return patient;
     }
 
     public void setPatient(Patient patient) {
         this.patient = patient;
+        if (patient != null) {
+            this.patient_id = patient.getPatient_id();
+        }
     }
 
     public LocalDate getRecommendation_date() {
@@ -98,6 +113,7 @@ public class InsulinRecommendation {
     public String toString() {
         return "InsulinRecommendation{" +
                 "recommendation_id=" + recommendation_id +
+                ", patient_id=" + patient_id +
                 ", patient=" + (patient != null ? patient.getAd() + " " + patient.getSoyad() : "Bilinmeyen") +
                 ", recommendation_date=" + recommendation_date +
                 ", averageValue=" + averageValue +

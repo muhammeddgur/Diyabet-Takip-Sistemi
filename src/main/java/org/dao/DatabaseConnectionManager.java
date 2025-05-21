@@ -8,9 +8,9 @@ import java.sql.SQLException;
  * Veritabanı bağlantılarını yönetmek için kullanılan sınıf.
  */
 public class DatabaseConnectionManager {
-    private static final String DB_URL = "jdbc:postgresql://100.91.94.35:5432/diyabettakip";
-    private static final String USER = "emirhan";
-    private static final String PASSWORD = "karabulut_0704";
+    private static final String DB_URL = "jdbc:postgresql://localhost:5432/diyabettakip-local";
+    private static final String USER = "postgres";
+    private static final String PASSWORD = "Emirhan.1006";
 
     private static DatabaseConnectionManager instance;
 
