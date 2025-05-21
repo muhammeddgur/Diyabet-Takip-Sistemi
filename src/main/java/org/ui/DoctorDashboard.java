@@ -1,6 +1,8 @@
 package org.ui;
 
+import org.dao.DietDao;
 import org.dao.DoctorDao;
+import org.dao.ExerciseDao;
 import org.dao.MeasurementDao;
 import org.model.*;
 import org.service.*;
@@ -36,6 +38,8 @@ public class DoctorDashboard extends JPanel {
     private RecommendationService recommendationService;
     private MainFrame parent;
     private SymptomService symptomService;
+    private DietDao dietDao;
+    private ExerciseDao exerciseDao;
 
 
     // Kart layout ve panel referansları
@@ -100,6 +104,9 @@ public class DoctorDashboard extends JPanel {
         this.parent = parent;
         this.allPatients = new ArrayList<>();
         this.filteredPatients = new ArrayList<>();
+        // DAO nesnelerini başlat
+        this.dietDao = new DietDao();
+        this.exerciseDao = new ExerciseDao();
 
         // Doktor ID'sini bul ve sakla
         try {
@@ -348,20 +355,46 @@ public class DoctorDashboard extends JPanel {
         dietPatientCombo = updatePatientCombo(dietPatientCombo);
         formPanel.add(dietPatientCombo, gbc);
 
-
-        // Diyet tipi seçimi
+        // Hasta seçildiğinde belirtileri yükle
+        JLabel patientSymptomsLabel = new JLabel("Mevcut Belirtiler: ");
         gbc.gridx = 0;
         gbc.gridy = 1;
+        formPanel.add(patientSymptomsLabel, gbc);
+
+        JLabel symptomsInfoLabel = new JLabel("(Belirtiler veritabanından otomatik yüklenir)");
+        gbc.gridx = 1;
+        formPanel.add(symptomsInfoLabel, gbc);
+
+        // Kan şekeri değeri giriş alanı
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        formPanel.add(new JLabel("Kan Şekeri Değeri:"), gbc);
+
+        gbc.gridx = 1;
+        JTextField bloodSugarField = new JTextField();
+        formPanel.add(bloodSugarField, gbc);
+
+        // Diyet tipi seçimi - dinamik olarak doldurulacak
+        gbc.gridx = 0;
+        gbc.gridy = 3;
         formPanel.add(new JLabel("Diyet Tipi:"), gbc);
 
         gbc.gridx = 1;
-        String[] dietTypes = {"Az Şekerli Diyet", "Şekersiz Diyet", "Dengeli Beslenme"};
-        JComboBox<String> dietTypeCombo = new JComboBox<>(dietTypes);
+        JComboBox<Diet> dietTypeCombo = new JComboBox<>();
+        // Tüm diyet tiplerini yükle
+        try {
+            List<Diet> allDiets = dietDao.findAll();
+            for (Diet diet : allDiets) {
+                dietTypeCombo.addItem(diet);
+            }
+        } catch (Exception e) {
+            System.err.println("Diyet tipleri yüklenirken hata: " + e.getMessage());
+        }
         formPanel.add(dietTypeCombo, gbc);
 
         // Diyet açıklaması
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 4;
         formPanel.add(new JLabel("Açıklama:"), gbc);
 
         gbc.gridx = 1;
@@ -371,17 +404,161 @@ public class DoctorDashboard extends JPanel {
         JScrollPane dietDescScroll = new JScrollPane(dietDescArea);
         formPanel.add(dietDescScroll, gbc);
 
-        // Ekle butonu
+        // Diyet tipi seçildiğinde açıklamayı güncelle
+        dietTypeCombo.addActionListener(e -> {
+            Diet selectedDiet = (Diet) dietTypeCombo.getSelectedItem();
+            if (selectedDiet != null) {
+                dietDescArea.setText(selectedDiet.getAciklama());
+            }
+        });
+
+        // Hasta seçildiğinde belirtileri güncelleme
+        dietPatientCombo.addActionListener(e -> {
+            Patient selectedPatient = (Patient) dietPatientCombo.getSelectedItem();
+            if (selectedPatient != null) {
+                try {
+                    // Hastanın belirtilerini veritabanından çek
+                    List<Map<String, Object>> patientSymptoms = symptomService.getPatientSymptomDetails(selectedPatient.getPatient_id());
+
+                    if (patientSymptoms.isEmpty()) {
+                        symptomsInfoLabel.setText("Bu hasta için kayıtlı belirti bulunmuyor.");
+                    } else {
+                        StringBuilder symptomsList = new StringBuilder("<html>");
+                        for (int i = 0; i < patientSymptoms.size(); i++) {
+                            if (i > 0) symptomsList.append(", ");
+                            symptomsList.append(patientSymptoms.get(i).get("symptomName"));
+                            if (i == 4 && patientSymptoms.size() > 5) {
+                                symptomsList.append(" ve ").append(patientSymptoms.size() - 5).append(" diğer...");
+                                break;
+                            }
+                        }
+                        symptomsList.append("</html>");
+                        symptomsInfoLabel.setText(symptomsList.toString());
+                    }
+                } catch (Exception ex) {
+                    symptomsInfoLabel.setText("Belirtiler yüklenirken hata oluştu.");
+                    System.err.println("Hasta belirtileri yüklenirken hata: " + ex.getMessage());
+                }
+            } else {
+                symptomsInfoLabel.setText("(Belirtiler veritabanından otomatik yüklenir)");
+            }
+        });
+
+        // Öneri oluştur butonu
         gbc.gridx = 0;
-        gbc.gridy = 3;
-        gbc.gridwidth = 2;
-        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.gridy = 5;
+        JButton recommendButton = new JButton("Öneri Oluştur");
+        recommendButton.addActionListener(e -> {
+            // Hasta seçilmiş mi kontrol et
+            if (dietPatientCombo.getSelectedItem() == null) {
+                JOptionPane.showMessageDialog(this,
+                        "Lütfen önce bir hasta seçin.",
+                        "Hasta Seçilmedi",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            Patient selectedPatient = (Patient) dietPatientCombo.getSelectedItem();
+
+            // Kan şekeri değeri
+            Integer bloodSugar = null;
+            if (!bloodSugarField.getText().trim().isEmpty()) {
+                try {
+                    bloodSugar = Integer.parseInt(bloodSugarField.getText().trim());
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this,
+                            "Geçerli bir kan şekeri değeri girin.",
+                            "Geçersiz Değer",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            }
+
+            try {
+                // Diyet önerisi al - null gönderince belirtiler veritabanından otomatik çekilecek
+                Diet recommendedDiet = recommendationService.recommendDiet(
+                        selectedPatient.getPatient_id(),
+                        bloodSugar,
+                        null); // Belirtiler veritabanından otomatik yüklenecek
+
+                if (recommendedDiet != null) {
+                    // Öneriyi combobox'ta seç
+                    for (int i = 0; i < dietTypeCombo.getItemCount(); i++) {
+                        Diet diet = (Diet) dietTypeCombo.getItemAt(i);
+                        if (diet.getDiet_adi().equals(recommendedDiet.getDiet_adi())) {
+                            dietTypeCombo.setSelectedIndex(i);
+                            break;
+                        }
+                    }
+
+                    JOptionPane.showMessageDialog(this,
+                            "Önerilen diyet: " + recommendedDiet.getDiet_adi(),
+                            "Diyet Önerisi",
+                            JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Uygun bir diyet önerisi bulunamadı.",
+                            "Öneri Yok",
+                            JOptionPane.WARNING_MESSAGE);
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Diyet önerisi oluşturulurken hata: " + ex.getMessage(),
+                        "Hata",
+                        JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
+        });
+        formPanel.add(recommendButton, gbc);
+
+        // Ekle butonu
+        gbc.gridx = 1;
         JButton addDietButton = new JButton("Diyet Planı Oluştur");
         addDietButton.addActionListener(e -> {
-            JOptionPane.showMessageDialog(this,
-                    "Diyet planı oluşturuldu. Bu özellik henüz tam olarak uygulanmamıştır.",
-                    "İşlem Tamamlandı",
-                    JOptionPane.INFORMATION_MESSAGE);
+            // Hasta ve diyet seçimi kontrolü
+            if (dietPatientCombo.getSelectedItem() == null || dietTypeCombo.getSelectedItem() == null) {
+                JOptionPane.showMessageDialog(this,
+                        "Lütfen hasta ve diyet tipini seçin.",
+                        "Form Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            Patient selectedPatient = (Patient) dietPatientCombo.getSelectedItem();
+            Diet selectedDiet = (Diet) dietTypeCombo.getSelectedItem();
+
+            try {
+                // Diyet planını oluştur
+                boolean success = dietDao.assignDietToPatient(
+                        selectedPatient.getPatient_id(),
+                        selectedDiet.getDiet_id(),
+                        doctorId
+                );
+
+                if (success) {
+                    JOptionPane.showMessageDialog(this,
+                            "Diyet planı başarıyla oluşturuldu.",
+                            "İşlem Başarılı",
+                            JOptionPane.INFORMATION_MESSAGE);
+
+                    // Form alanlarını temizle
+                    dietPatientCombo.setSelectedIndex(0);
+                    dietTypeCombo.setSelectedIndex(0);
+                    dietDescArea.setText("");
+                    bloodSugarField.setText("");
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Diyet planı oluşturulurken bir hata oluştu.",
+                            "İşlem Hatası",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Veritabanı hatası: " + ex.getMessage(),
+                        "İşlem Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
         });
         formPanel.add(addDietButton, gbc);
 
@@ -392,7 +569,7 @@ public class DoctorDashboard extends JPanel {
         tablePanel.setBorder(BorderFactory.createTitledBorder("Mevcut Diyet Planları"));
 
         String[] columnNames = {
-                "Hasta", "Diyet Tipi", "Başlangıç Tarihi", "Uyum Oranı"
+                "Hasta", "Diyet Tipi", "Başlangıç Tarihi", "Açıklama"
         };
         DefaultTableModel model = new DefaultTableModel(columnNames, 0);
         JTable dietsTable = new JTable(model);
@@ -428,19 +605,46 @@ public class DoctorDashboard extends JPanel {
         exercisePatientCombo = updatePatientCombo(exercisePatientCombo);
         formPanel.add(exercisePatientCombo, gbc);
 
-        // Egzersiz tipi seçimi
+        // Hasta seçildiğinde belirtileri yükle
+        JLabel patientSymptomsLabel = new JLabel("Mevcut Belirtiler: ");
         gbc.gridx = 0;
         gbc.gridy = 1;
+        formPanel.add(patientSymptomsLabel, gbc);
+
+        JLabel symptomsInfoLabel = new JLabel("(Belirtiler veritabanından otomatik yüklenir)");
+        gbc.gridx = 1;
+        formPanel.add(symptomsInfoLabel, gbc);
+
+        // Kan şekeri değeri giriş alanı
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        formPanel.add(new JLabel("Kan Şekeri Değeri:"), gbc);
+
+        gbc.gridx = 1;
+        JTextField bloodSugarField = new JTextField();
+        formPanel.add(bloodSugarField, gbc);
+
+        // Egzersiz tipi seçimi
+        gbc.gridx = 0;
+        gbc.gridy = 3;
         formPanel.add(new JLabel("Egzersiz Tipi:"), gbc);
 
         gbc.gridx = 1;
-        String[] exerciseTypes = {"Yürüyüş", "Bisiklet", "Klinik Egzersiz", "Yok"};
-        JComboBox<String> exerciseTypeCombo = new JComboBox<>(exerciseTypes);
+        JComboBox<Exercise> exerciseTypeCombo = new JComboBox<>();
+        // Tüm egzersiz tiplerini yükle
+        try {
+            List<Exercise> allExercises = exerciseDao.findAll();
+            for (Exercise exercise : allExercises) {
+                exerciseTypeCombo.addItem(exercise);
+            }
+        } catch (Exception e) {
+            System.err.println("Egzersiz tipleri yüklenirken hata: " + e.getMessage());
+        }
         formPanel.add(exerciseTypeCombo, gbc);
 
         // Egzersiz açıklaması
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 4;
         formPanel.add(new JLabel("Açıklama/Yönergeler:"), gbc);
 
         gbc.gridx = 1;
@@ -450,17 +654,161 @@ public class DoctorDashboard extends JPanel {
         JScrollPane exerciseDescScroll = new JScrollPane(exerciseDescArea);
         formPanel.add(exerciseDescScroll, gbc);
 
-        // Ekle butonu
+        // Egzersiz tipi seçildiğinde açıklamayı güncelle
+        exerciseTypeCombo.addActionListener(e -> {
+            Exercise selectedExercise = (Exercise) exerciseTypeCombo.getSelectedItem();
+            if (selectedExercise != null) {
+                exerciseDescArea.setText(selectedExercise.getAciklama());
+            }
+        });
+
+        // Hasta seçildiğinde belirtileri güncelleme
+        exercisePatientCombo.addActionListener(e -> {
+            Patient selectedPatient = (Patient) exercisePatientCombo.getSelectedItem();
+            if (selectedPatient != null) {
+                try {
+                    // Hastanın belirtilerini veritabanından çek
+                    List<Map<String, Object>> patientSymptoms = symptomService.getPatientSymptomDetails(selectedPatient.getPatient_id());
+
+                    if (patientSymptoms.isEmpty()) {
+                        symptomsInfoLabel.setText("Bu hasta için kayıtlı belirti bulunmuyor.");
+                    } else {
+                        StringBuilder symptomsList = new StringBuilder("<html>");
+                        for (int i = 0; i < patientSymptoms.size(); i++) {
+                            if (i > 0) symptomsList.append(", ");
+                            symptomsList.append(patientSymptoms.get(i).get("symptomName"));
+                            if (i == 4 && patientSymptoms.size() > 5) {
+                                symptomsList.append(" ve ").append(patientSymptoms.size() - 5).append(" diğer...");
+                                break;
+                            }
+                        }
+                        symptomsList.append("</html>");
+                        symptomsInfoLabel.setText(symptomsList.toString());
+                    }
+                } catch (Exception ex) {
+                    symptomsInfoLabel.setText("Belirtiler yüklenirken hata oluştu.");
+                    System.err.println("Hasta belirtileri yüklenirken hata: " + ex.getMessage());
+                }
+            } else {
+                symptomsInfoLabel.setText("(Belirtiler veritabanından otomatik yüklenir)");
+            }
+        });
+
+        // Öneri oluştur butonu
         gbc.gridx = 0;
-        gbc.gridy = 3;
-        gbc.gridwidth = 2;
-        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.gridy = 5;
+        JButton recommendButton = new JButton("Öneri Oluştur");
+        recommendButton.addActionListener(e -> {
+            // Hasta seçilmiş mi kontrol et
+            if (exercisePatientCombo.getSelectedItem() == null) {
+                JOptionPane.showMessageDialog(this,
+                        "Lütfen önce bir hasta seçin.",
+                        "Hasta Seçilmedi",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            Patient selectedPatient = (Patient) exercisePatientCombo.getSelectedItem();
+
+            // Kan şekeri değeri
+            Integer bloodSugar = null;
+            if (!bloodSugarField.getText().trim().isEmpty()) {
+                try {
+                    bloodSugar = Integer.parseInt(bloodSugarField.getText().trim());
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this,
+                            "Geçerli bir kan şekeri değeri girin.",
+                            "Geçersiz Değer",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            }
+
+            try {
+                // Egzersiz önerisi al - null gönderince belirtiler veritabanından otomatik çekilecek
+                Exercise recommendedExercise = recommendationService.recommendExercise(
+                        selectedPatient.getPatient_id(),
+                        bloodSugar,
+                        null); // Belirtiler veritabanından otomatik yüklenecek
+
+                if (recommendedExercise != null) {
+                    // Öneriyi combobox'ta seç
+                    for (int i = 0; i < exerciseTypeCombo.getItemCount(); i++) {
+                        Exercise exercise = (Exercise) exerciseTypeCombo.getItemAt(i);
+                        if (exercise.getExercise_adi().equals(recommendedExercise.getExercise_adi())) {
+                            exerciseTypeCombo.setSelectedIndex(i);
+                            break;
+                        }
+                    }
+
+                    JOptionPane.showMessageDialog(this,
+                            "Önerilen egzersiz: " + recommendedExercise.getExercise_adi(),
+                            "Egzersiz Önerisi",
+                            JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Uygun bir egzersiz önerisi bulunamadı.",
+                            "Öneri Yok",
+                            JOptionPane.WARNING_MESSAGE);
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Egzersiz önerisi oluşturulurken hata: " + ex.getMessage(),
+                        "Hata",
+                        JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
+        });
+        formPanel.add(recommendButton, gbc);
+
+        // Ekle butonu
+        gbc.gridx = 1;
         JButton addExerciseButton = new JButton("Egzersiz Planı Oluştur");
         addExerciseButton.addActionListener(e -> {
-            JOptionPane.showMessageDialog(this,
-                    "Egzersiz planı oluşturuldu. Bu özellik henüz tam olarak uygulanmamıştır.",
-                    "İşlem Tamamlandı",
-                    JOptionPane.INFORMATION_MESSAGE);
+            // Hasta ve egzersiz seçimi kontrolü
+            if (exercisePatientCombo.getSelectedItem() == null || exerciseTypeCombo.getSelectedItem() == null) {
+                JOptionPane.showMessageDialog(this,
+                        "Lütfen hasta ve egzersiz tipini seçin.",
+                        "Form Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            Patient selectedPatient = (Patient) exercisePatientCombo.getSelectedItem();
+            Exercise selectedExercise = (Exercise) exerciseTypeCombo.getSelectedItem();
+
+            try {
+                // Egzersiz planını oluştur
+                boolean success = exerciseDao.assignExerciseToPatient(
+                        selectedPatient.getPatient_id(),
+                        selectedExercise.getExercise_id(),
+                        doctorId
+                );
+
+                if (success) {
+                    JOptionPane.showMessageDialog(this,
+                            "Egzersiz planı başarıyla oluşturuldu.",
+                            "İşlem Başarılı",
+                            JOptionPane.INFORMATION_MESSAGE);
+
+                    // Form alanlarını temizle
+                    exercisePatientCombo.setSelectedIndex(0);
+                    exerciseTypeCombo.setSelectedIndex(0);
+                    exerciseDescArea.setText("");
+                    bloodSugarField.setText("");
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Egzersiz planı oluşturulurken bir hata oluştu.",
+                            "İşlem Hatası",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Veritabanı hatası: " + ex.getMessage(),
+                        "İşlem Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
         });
         formPanel.add(addExerciseButton, gbc);
 
@@ -471,7 +819,7 @@ public class DoctorDashboard extends JPanel {
         tablePanel.setBorder(BorderFactory.createTitledBorder("Mevcut Egzersiz Planları"));
 
         String[] columnNames = {
-                "Hasta", "Egzersiz Tipi", "Başlangıç Tarihi", "Uyum Oranı"
+                "Hasta", "Egzersiz Tipi", "Başlangıç Tarihi", "Açıklama"
         };
         DefaultTableModel model = new DefaultTableModel(columnNames, 0);
         JTable exercisesTable = new JTable(model);
@@ -482,6 +830,36 @@ public class DoctorDashboard extends JPanel {
 
         return panel;
     }
+
+    private JTextArea logArea;
+
+    private void addDebugPanel() {
+        JPanel debugPanel = new JPanel(new BorderLayout());
+        debugPanel.setBorder(BorderFactory.createTitledBorder("Debug Bilgileri"));
+
+        logArea = new JTextArea(5, 50);
+        logArea.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(logArea);
+        debugPanel.add(scrollPane, BorderLayout.CENTER);
+
+        JButton clearButton = new JButton("Temizle");
+        clearButton.addActionListener(e -> logArea.setText(""));
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(clearButton);
+        debugPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        add(debugPanel, BorderLayout.SOUTH);
+    }
+
+    // Log ekleme metodu
+    private void log(String message) {
+        if (logArea != null) {
+            logArea.append(message + "\n");
+            logArea.setCaretPosition(logArea.getDocument().getLength());
+        }
+    }
+
+// RecommendationService sınıfında bu metodu çağırarak çalışma detaylarını loglayabiliriz
 
     /**
      * Hasta combo box'ını günceller
@@ -876,7 +1254,9 @@ public class DoctorDashboard extends JPanel {
         return panel;
     }
 
-    // Belirtiler paneli
+    /**
+     * Belirtiler paneli
+     */
     private JPanel createSymptomsPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -889,21 +1269,58 @@ public class DoctorDashboard extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(5, 5, 5, 5);
 
-        // Belirti tipi
+        // Belirti tipi - veritabanından çekilen değerlerle doldurulan ComboBox
         gbc.gridx = 0;
         gbc.gridy = 0;
         formPanel.add(new JLabel("Belirti Tipi:"), gbc);
 
         gbc.gridx = 1;
-        String[] symptomTypes = {"Poliüri (Sık idrara çıkma)", "Polifaji (Aşırı açlık hissi)",
-                "Polidipsi (Aşırı susama hissi)", "Nöropati (El ve ayaklarda uyuşma)",
-                "Kilo kaybı", "Yorgunluk", "Yaraların yavaş iyileşmesi", "Bulanık görme", "Diğer"};
-        JComboBox<String> symptomTypeCombo = new JComboBox<>(symptomTypes);
+        JComboBox<SymptomItem> symptomTypeCombo = new JComboBox<>();
+
+        // Belirtileri veritabanından çek ve ComboBox'a ekle
+        try {
+            List<Symptom> allSymptoms = symptomService.getAllSymptoms();
+            for (Symptom symptom : allSymptoms) {
+                symptomTypeCombo.addItem(new SymptomItem(symptom));
+            }
+
+            // "Diğer" seçeneğini en sona ekle
+            Symptom otherSymptom = new Symptom();
+            otherSymptom.setSymptom_id(-1); // Özel ID
+            otherSymptom.setSymptom_adi("Diğer");
+            otherSymptom.setAciklama("Özel belirti eklemek için");
+            symptomTypeCombo.addItem(new SymptomItem(otherSymptom));
+
+        } catch (Exception e) {
+            System.err.println("Belirtiler yüklenirken hata: " + e.getMessage());
+            e.printStackTrace();
+        }
+
         formPanel.add(symptomTypeCombo, gbc);
+
+        // Özel belirti alanı - sadece "Diğer" seçildiğinde görünür
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        JLabel customSymptomLabel = new JLabel("Özel Belirti Adı:");
+        customSymptomLabel.setVisible(false);
+        formPanel.add(customSymptomLabel, gbc);
+
+        gbc.gridx = 1;
+        JTextField customSymptomField = new JTextField();
+        customSymptomField.setVisible(false);
+        formPanel.add(customSymptomField, gbc);
+
+        // "Diğer" seçildiğinde özel belirti alanını göster/gizle
+        symptomTypeCombo.addActionListener(e -> {
+            SymptomItem selectedItem = (SymptomItem) symptomTypeCombo.getSelectedItem();
+            boolean isOther = selectedItem != null && selectedItem.getSymptom().getSymptom_id() == -1;
+            customSymptomLabel.setVisible(isOther);
+            customSymptomField.setVisible(isOther);
+        });
 
         // Başlangıç tarihi
         gbc.gridx = 0;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         formPanel.add(new JLabel("Başlangıç Tarihi:"), gbc);
 
         gbc.gridx = 1;
@@ -920,7 +1337,7 @@ public class DoctorDashboard extends JPanel {
 
         // Notlar/Açıklama
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         formPanel.add(new JLabel("Açıklama:"), gbc);
 
         gbc.gridx = 1;
@@ -937,7 +1354,7 @@ public class DoctorDashboard extends JPanel {
 
         // Butonlar
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.gridwidth = 2;
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
 
@@ -952,43 +1369,89 @@ public class DoctorDashboard extends JPanel {
                 return;
             }
 
-            // Form verilerini al
-            String symptomName = symptomTypeCombo.getSelectedItem().toString();
-            Date startDate = (Date) startDateSpinner.getValue();
-            String notes = notesArea.getText();
+            try {
+                // Form verilerini al
+                SymptomItem selectedItem = (SymptomItem) symptomTypeCombo.getSelectedItem();
+                if (selectedItem == null) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Lütfen bir belirti tipi seçin.",
+                            "Belirti Tipi Seçilmedi",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
 
-            // Tarihi LocalDate'e dönüştür - DateTimeUtil kullanarak
-            LocalDate reportDate = startDate.toInstant()
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate();
+                Date startDate = (Date) startDateSpinner.getValue();
+                String notes = notesArea.getText();
 
-            // Belirtiyi ekle
-            boolean success = symptomService.addSymptomToPatientByName(
-                    selectedPatient.getPatient_id(),
-                    symptomName,
-                    notes,
-                    reportDate
-            );
+                // Tarihi LocalDate'e dönüştür
+                LocalDate reportDate = startDate.toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate();
 
-            if (success) {
+                boolean success = false;
+
+                // "Diğer" seçeneği için özel işlem
+                if (selectedItem.getSymptom().getSymptom_id() == -1) {
+                    String customSymptomName = customSymptomField.getText().trim();
+                    if (customSymptomName.isEmpty()) {
+                        JOptionPane.showMessageDialog(panel,
+                                "Özel belirti adı girmelisiniz.",
+                                "Eksik Bilgi",
+                                JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+
+                    // Özel belirtiyi ekle
+                    success = symptomService.addSymptomToPatientByName(
+                            selectedPatient.getPatient_id(),
+                            customSymptomName,
+                            notes,
+                            reportDate
+                    );
+                } else {
+                    // Seçilen belirtiyi ekle
+                    PatientSymptom patientSymptom = new PatientSymptom();
+                    patientSymptom.setPatient_id(selectedPatient.getPatient_id());
+                    patientSymptom.setSymptom_id(selectedItem.getSymptom().getSymptom_id());
+                    patientSymptom.setBelirtilme_tarihi(reportDate);
+
+                    try {
+                        success = symptomService.savePatientSymptom(patientSymptom);
+                    } catch (SQLException ex) {
+                        System.err.println("Belirti eklenirken hata: " + ex.getMessage());
+                        throw ex;
+                    }
+                }
+
+                if (success) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Belirti başarıyla eklendi.",
+                            "İşlem Başarılı",
+                            JOptionPane.INFORMATION_MESSAGE);
+
+                    // Formu temizle
+                    symptomTypeCombo.setSelectedIndex(0);
+                    startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant()));
+                    notesArea.setText("");
+                    patientSymptomIdField.setText("");
+                    customSymptomField.setText("");
+                    customSymptomField.setVisible(false);
+                    customSymptomLabel.setVisible(false);
+
+                    // Belirti tablosunu güncelle
+                    refreshSymptomsList((JTable) ((JScrollPane) panel.getComponent(1)).getViewport().getView());
+                } else {
+                    JOptionPane.showMessageDialog(panel,
+                            "Belirti eklenirken bir hata oluştu.",
+                            "İşlem Başarısız",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (Exception ex) {
                 JOptionPane.showMessageDialog(panel,
-                        "Belirti başarıyla eklendi.",
-                        "İşlem Başarılı",
-                        JOptionPane.INFORMATION_MESSAGE);
-
-                // Formu temizle
-                symptomTypeCombo.setSelectedIndex(0);
-                startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
-                notesArea.setText("");
-                patientSymptomIdField.setText("");
-
-                // Belirti tablosunu güncelle
-                refreshSymptomsList((JTable) ((JScrollPane) panel.getComponent(1)).getViewport().getView());
-            } else {
-                JOptionPane.showMessageDialog(panel,
-                        "Belirti eklenirken bir hata oluştu.",
-                        "İşlem Başarısız",
+                        "İşlem sırasında bir hata oluştu: " + ex.getMessage(),
+                        "Hata",
                         JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
             }
         });
         buttonPanel.add(addButton);
@@ -1017,24 +1480,52 @@ public class DoctorDashboard extends JPanel {
             try {
                 // Form verilerini al
                 Integer patientSymptomId = Integer.parseInt(idText);
-                String symptomName = symptomTypeCombo.getSelectedItem().toString();
+                SymptomItem selectedItem = (SymptomItem) symptomTypeCombo.getSelectedItem();
+
+                if (selectedItem == null) {
+                    JOptionPane.showMessageDialog(panel,
+                            "Lütfen bir belirti tipi seçin.",
+                            "Belirti Tipi Seçilmedi",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
                 Date startDate = (Date) startDateSpinner.getValue();
                 String notes = notesArea.getText();
 
-                // Tarihi LocalDate'e dönüştür - DateTimeUtil kullanarak
+                // Tarihi LocalDate'e dönüştür
                 LocalDate reportDate = startDate.toInstant()
                         .atZone(ZoneId.systemDefault())
                         .toLocalDate();
 
-                // Önce belirti adına göre belirti ID'sini bul
-                Symptom symptom = symptomService.createOrGetSymptom(symptomName, notes);
+                boolean success = false;
 
-                // Belirtiyi güncelle
-                boolean success = symptomService.updatePatientSymptom(
-                        patientSymptomId,
-                        symptom.getSymptom_id(),
-                        reportDate
-                );
+                // "Diğer" seçeneği için özel işlem
+                if (selectedItem.getSymptom().getSymptom_id() == -1) {
+                    String customSymptomName = customSymptomField.getText().trim();
+                    if (customSymptomName.isEmpty()) {
+                        JOptionPane.showMessageDialog(panel,
+                                "Özel belirti adı girmelisiniz.",
+                                "Eksik Bilgi",
+                                JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+
+                    // Önce özel belirtiyi oluştur/al
+                    Symptom symptom = symptomService.createOrGetSymptom(customSymptomName, notes);
+                    success = symptomService.updatePatientSymptom(
+                            patientSymptomId,
+                            symptom.getSymptom_id(),
+                            reportDate
+                    );
+                } else {
+                    // Normal belirti güncellemesi
+                    success = symptomService.updatePatientSymptom(
+                            patientSymptomId,
+                            selectedItem.getSymptom().getSymptom_id(),
+                            reportDate
+                    );
+                }
 
                 if (success) {
                     JOptionPane.showMessageDialog(panel,
@@ -1044,9 +1535,12 @@ public class DoctorDashboard extends JPanel {
 
                     // Formu temizle
                     symptomTypeCombo.setSelectedIndex(0);
-                    startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
+                    startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant()));
                     notesArea.setText("");
                     patientSymptomIdField.setText("");
+                    customSymptomField.setText("");
+                    customSymptomField.setVisible(false);
+                    customSymptomLabel.setVisible(false);
 
                     // Belirti tablosunu güncelle
                     refreshSymptomsList((JTable) ((JScrollPane) panel.getComponent(1)).getViewport().getView());
@@ -1105,9 +1599,12 @@ public class DoctorDashboard extends JPanel {
 
                     // Formu temizle
                     symptomTypeCombo.setSelectedIndex(0);
-                    startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
+                    startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant()));
                     notesArea.setText("");
                     patientSymptomIdField.setText("");
+                    customSymptomField.setText("");
+                    customSymptomField.setVisible(false);
+                    customSymptomLabel.setVisible(false);
 
                     // Belirti tablosunu güncelle
                     refreshSymptomsList((JTable) ((JScrollPane) panel.getComponent(1)).getViewport().getView());
@@ -1130,9 +1627,12 @@ public class DoctorDashboard extends JPanel {
         clearButton.addActionListener(e -> {
             // Formu temizle
             symptomTypeCombo.setSelectedIndex(0);
-            startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant())); // DateTimeUtil kullanımı
+            startDateSpinner.setValue(Date.from(DateTimeUtil.getCurrentDate().atStartOfDay(ZoneId.systemDefault()).toInstant()));
             notesArea.setText("");
             patientSymptomIdField.setText("");
+            customSymptomField.setText("");
+            customSymptomField.setVisible(false);
+            customSymptomLabel.setVisible(false);
         });
         buttonPanel.add(clearButton);
 
@@ -1175,22 +1675,36 @@ public class DoctorDashboard extends JPanel {
                 String id = symptomsTable.getValueAt(selectedRow, 0).toString();
                 patientSymptomIdField.setText(id);
 
-                // Diğer değerleri al ve form alanlarını doldur
+                // Diğer değerleri al
                 String tarih = symptomsTable.getValueAt(selectedRow, 1).toString();
                 String belirti = symptomsTable.getValueAt(selectedRow, 2).toString();
                 String aciklama = symptomsTable.getValueAt(selectedRow, 3).toString();
 
-                // Belirti tipi combo box'ını ayarla
+                // Belirti tipini ComboBox'ta bul
+                boolean found = false;
                 for (int i = 0; i < symptomTypeCombo.getItemCount(); i++) {
-                    if (symptomTypeCombo.getItemAt(i).toString().equals(belirti)) {
+                    SymptomItem item = symptomTypeCombo.getItemAt(i);
+                    if (item.toString().equals(belirti)) {
                         symptomTypeCombo.setSelectedIndex(i);
+                        found = true;
                         break;
+                    }
+                }
+
+                // Eğer ComboBox'ta bulunamadıysa "Diğer" seçeneğini seç ve özel alan olarak ayarla
+                if (!found && symptomTypeCombo.getItemCount() > 0) {
+                    for (int i = 0; i < symptomTypeCombo.getItemCount(); i++) {
+                        SymptomItem item = symptomTypeCombo.getItemAt(i);
+                        if (item.getSymptom().getSymptom_id() == -1) { // "Diğer" seçeneği
+                            symptomTypeCombo.setSelectedIndex(i);
+                            customSymptomField.setText(belirti);
+                            break;
+                        }
                     }
                 }
 
                 // Tarih ve açıklama alanlarını ayarla
                 try {
-                    // DateTimeUtil kullanarak tarih işlemi
                     LocalDate date = DateTimeUtil.parseDate(tarih);
                     if (date != null) {
                         Date javaDate = Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
@@ -1198,6 +1712,7 @@ public class DoctorDashboard extends JPanel {
                     }
                 } catch (Exception ex) {
                     System.err.println("Tarih dönüştürme hatası: " + ex.getMessage());
+                    ex.printStackTrace();
                 }
 
                 notesArea.setText(aciklama);
@@ -1228,6 +1743,26 @@ public class DoctorDashboard extends JPanel {
         panel.add(statusPanel, BorderLayout.SOUTH);
 
         return panel;
+    }
+
+    /**
+     * Belirti nesnelerini ComboBox'da göstermek için yardımcı sınıf
+     */
+    private class SymptomItem {
+        private Symptom symptom;
+
+        public SymptomItem(Symptom symptom) {
+            this.symptom = symptom;
+        }
+
+        public Symptom getSymptom() {
+            return symptom;
+        }
+
+        @Override
+        public String toString() {
+            return symptom.getSymptom_adi();
+        }
     }
 
     /**

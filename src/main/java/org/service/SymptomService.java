@@ -1,150 +1,163 @@
 package org.service;
 
-import org.dao.PatientSymptomDao;
 import org.dao.SymptomDao;
 import org.model.PatientSymptom;
 import org.model.Symptom;
-import org.util.DateTimeUtil;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Belirti yönetimi için servis sınıfı
- */
 public class SymptomService {
 
     private final SymptomDao symptomDao;
-    private final PatientSymptomDao patientSymptomDao;
 
     public SymptomService() {
         this.symptomDao = new SymptomDao();
-        this.patientSymptomDao = new PatientSymptomDao();
     }
 
     /**
-     * Yeni belirti ekler veya mevcut belirti adını kullanır
-     * @param symptomName Belirti adı
-     * @param description Açıklama
-     * @return Belirti nesnesi
+     * Tüm belirti türlerini getirir
+     * @return Tüm belirti türleri
      */
-    public Symptom createOrGetSymptom(String symptomName, String description) {
+    public List<Symptom> getAllSymptoms() {
         try {
-            // Belirti adına göre ara
-            Symptom existingSymptom = symptomDao.findByName(symptomName);
-
-            // Varsa mevcut belirtiyi döndür
-            if (existingSymptom != null) {
-                return existingSymptom;
-            }
-
-            // Yoksa yeni belirti oluştur
-            Symptom newSymptom = new Symptom(symptomName, description);
-            boolean saved = symptomDao.save(newSymptom);
-
-            if (saved) {
-                return newSymptom;
-            } else {
-                throw new RuntimeException("Belirti kaydedilemedi");
-            }
+            return symptomDao.findAll();
         } catch (SQLException e) {
-            System.err.println("Belirti işlemleri sırasında hata: " + e.getMessage());
-            throw new RuntimeException("Veritabanı hatası: " + e.getMessage());
+            System.err.println("Belirtiler alınırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
         }
     }
 
     /**
-     * Hastaya belirti ekler
-     * @param patientId Hasta ID
-     * @param symptomId Belirti ID
-     * @param reportDate Bildirim tarihi
-     * @return İşlem başarılı ise true, değilse false
-     */
-    public boolean addSymptomToPatient(Integer patientId, Integer symptomId, LocalDate reportDate) {
-        try {
-            // Tarih null ise güncel tarihi kullan
-            LocalDate date = (reportDate != null) ? reportDate : DateTimeUtil.getCurrentDate();
-
-            PatientSymptom patientSymptom = new PatientSymptom(patientId, symptomId, date);
-            return patientSymptomDao.save(patientSymptom);
-        } catch (SQLException e) {
-            System.err.println("Hastaya belirti eklenirken hata: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Hastaya belirti ekler (adı ile)
-     * @param patientId Hasta ID
+     * Belirti adına göre belirti nesnesini getirir
      * @param symptomName Belirti adı
-     * @param description Açıklama
-     * @param reportDate Bildirim tarihi
-     * @return İşlem başarılı ise true, değilse false
+     * @return Belirti nesnesi veya null
      */
-    public boolean addSymptomToPatientByName(Integer patientId, String symptomName,
-                                             String description, LocalDate reportDate) {
+    public Symptom getSymptomByName(String symptomName) {
         try {
-            // Belirti oluştur veya mevcut olanı al
-            Symptom symptom = createOrGetSymptom(symptomName, description);
-
-            // Tarih kontrolü
-            LocalDate date = (reportDate != null) ? reportDate : DateTimeUtil.getCurrentDate();
-
-            // Hastaya belirtiyi ekle
-            return addSymptomToPatient(patientId, symptom.getSymptom_id(), date);
-        } catch (Exception e) {
-            System.err.println("Hastaya belirti eklenirken hata: " + e.getMessage());
-            return false;
+            return symptomDao.findByName(symptomName);
+        } catch (SQLException e) {
+            System.err.println("Belirti adına göre arama yapılırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return null;
         }
     }
 
     /**
      * Hastanın belirtilerini getirir
      * @param patientId Hasta ID
-     * @return Hasta belirtilerinin listesi
+     * @return Hasta belirtileri listesi
      */
-    public List<Map<String, Object>> getPatientSymptomDetails(Integer patientId) {
+    public List<PatientSymptom> getPatientSymptoms(Integer patientId) {
         try {
-            List<PatientSymptom> patientSymptoms = patientSymptomDao.findByPatientId(patientId);
-            List<Map<String, Object>> result = new ArrayList<>();
-
-            for (PatientSymptom ps : patientSymptoms) {
-                Map<String, Object> symptomDetail = new HashMap<>();
-
-                // Semptom bilgilerini al
-                Symptom symptom = symptomDao.findById(ps.getSymptom_id());
-                if (symptom != null) {
-                    symptomDetail.put("symptomId", symptom.getSymptom_id());
-                    symptomDetail.put("symptomName", symptom.getSymptom_adi());
-                    symptomDetail.put("description", symptom.getAciklama());
-                    symptomDetail.put("reportDate", ps.getBelirtilme_tarihi());
-                    symptomDetail.put("patientSymptomId", ps.getPatient_symptom_id());
-
-                    result.add(symptomDetail);
-                }
-            }
-
-            return result;
+            return symptomDao.getPatientSymptomsByPatientId(patientId);
         } catch (SQLException e) {
-            System.err.println("Hasta belirtileri getirilirken hata: " + e.getMessage());
+            System.err.println("Hasta belirtileri alınırken hata: " + e.getMessage());
+            e.printStackTrace();
             return new ArrayList<>();
         }
     }
 
     /**
-     * Hasta belirtisini siler
-     * @param patientSymptomId Hasta belirti ID
-     * @return İşlem başarılı ise true, değilse false
+     * Hasta belirtilerini detaylı olarak getirir (semptom adı, açıklama vb. bilgiler dahil)
+     * @param patientId Hasta ID
+     * @return Detaylı belirti bilgileri listesi
      */
-    public boolean deletePatientSymptom(Integer patientSymptomId) {
+    public List<Map<String, Object>> getPatientSymptomDetails(Integer patientId) {
         try {
-            return patientSymptomDao.delete(patientSymptomId);
+            return symptomDao.getPatientSymptomDetails(patientId);
         } catch (SQLException e) {
-            System.err.println("Hasta belirtisi silinirken hata: " + e.getMessage());
+            System.err.println("Hasta belirti detayları alınırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Belirti adına göre belirtiyi bulur veya yoksa yeni oluşturur
+     * @param symptomName Belirti adı
+     * @param description Açıklama
+     * @return Belirti nesnesi
+     */
+    public Symptom createOrGetSymptom(String symptomName, String description) {
+        try {
+            Symptom symptom = symptomDao.findByName(symptomName);
+            if (symptom == null) {
+                symptom = new Symptom();
+                symptom.setSymptom_adi(symptomName);
+                symptom.setAciklama(description);
+                symptomDao.save(symptom);
+            }
+            return symptom;
+        } catch (SQLException e) {
+            System.err.println("Belirti oluşturulurken hata: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Belirtiyi hastaya ekler
+     * @param patientId Hasta ID
+     * @param symptomId Belirti ID
+     * @param reportDate Belirtilme tarihi
+     * @return İşlem başarılı ise true
+     */
+    public boolean addSymptomToPatient(Integer patientId, Integer symptomId, LocalDate reportDate) {
+        try {
+            PatientSymptom patientSymptom = new PatientSymptom();
+            patientSymptom.setPatient_id(patientId);
+            patientSymptom.setSymptom_id(symptomId);
+            patientSymptom.setBelirtilme_tarihi(reportDate != null ? reportDate : LocalDate.now());
+
+            return symptomDao.savePatientSymptom(patientSymptom);
+        } catch (SQLException e) {
+            System.err.println("Hasta belirtisi eklenirken hata: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * Hasta belirtisi ekler
+     * @param patientSymptom Hasta belirti nesnesi
+     * @return İşlem başarılı ise true
+     */
+    public boolean savePatientSymptom(PatientSymptom patientSymptom) throws SQLException {
+        try {
+            return symptomDao.savePatientSymptom(patientSymptom);
+        } catch (SQLException e) {
+            System.err.println("Hasta belirtisi eklenirken hata: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Belirti adına göre hastaya belirti ekler
+     * @param patientId Hasta ID
+     * @param symptomName Belirti adı
+     * @param description Açıklama
+     * @param reportDate Belirtilme tarihi
+     * @return İşlem başarılı ise true
+     */
+    public boolean addSymptomToPatientByName(Integer patientId, String symptomName,
+                                             String description, LocalDate reportDate) {
+        try {
+            // Önce belirti adına göre belirti nesnesini bul veya oluştur
+            Symptom symptom = createOrGetSymptom(symptomName, description);
+            if (symptom == null) {
+                return false;
+            }
+
+            // Hastaya bu belirtiyi ekle
+            return addSymptomToPatient(patientId, symptom.getSymptom_id(), reportDate);
+        } catch (Exception e) {
+            System.err.println("Hasta belirtisi eklenirken hata: " + e.getMessage());
+            e.printStackTrace();
             return false;
         }
     }
@@ -153,41 +166,53 @@ public class SymptomService {
      * Hasta belirtisini günceller
      * @param patientSymptomId Hasta belirti ID
      * @param symptomId Yeni belirti ID
-     * @param reportDate Yeni bildirim tarihi
-     * @return İşlem başarılı ise true, değilse false
+     * @param reportDate Yeni belirtilme tarihi
+     * @return İşlem başarılı ise true
      */
     public boolean updatePatientSymptom(Integer patientSymptomId, Integer symptomId, LocalDate reportDate) {
         try {
-            PatientSymptom patientSymptom = patientSymptomDao.findById(patientSymptomId);
-            if (patientSymptom != null) {
-                patientSymptom.setSymptom_id(symptomId);
+            // Önce mevcut belirtiyi bul
+            PatientSymptom patientSymptom = null;
 
-                // Tarih kontrolü
-                if (reportDate != null) {
-                    patientSymptom.setBelirtilme_tarihi(reportDate);
-                } else {
-                    patientSymptom.setBelirtilme_tarihi(DateTimeUtil.getCurrentDate());
+            // Hasta belirtilerini getir ve ID'ye göre ara
+            for (PatientSymptom ps : symptomDao.getPatientSymptomsByPatientId(null)) {
+                if (ps.getPatient_symptom_id().equals(patientSymptomId)) {
+                    patientSymptom = ps;
+                    break;
                 }
-
-                return patientSymptomDao.save(patientSymptom);
             }
-            return false;
+
+            if (patientSymptom == null) {
+                return false;
+            }
+
+            // Belirti ID ve tarihi güncelle
+            patientSymptom.setSymptom_id(symptomId);
+            if (reportDate != null) {
+                patientSymptom.setBelirtilme_tarihi(reportDate);
+            }
+
+            // Kaydı güncelle
+            return symptomDao.savePatientSymptom(patientSymptom);
         } catch (SQLException e) {
             System.err.println("Hasta belirtisi güncellenirken hata: " + e.getMessage());
+            e.printStackTrace();
             return false;
         }
     }
 
     /**
-     * Tüm belirtileri getirir
-     * @return Belirtilerin listesi
+     * Hasta belirtisini siler
+     * @param patientSymptomId Hasta belirti ID
+     * @return İşlem başarılı ise true
      */
-    public List<Symptom> getAllSymptoms() {
+    public boolean deletePatientSymptom(Integer patientSymptomId) {
         try {
-            return symptomDao.findAll();
+            return symptomDao.deletePatientSymptom(patientSymptomId);
         } catch (SQLException e) {
-            System.err.println("Belirtiler getirilirken hata: " + e.getMessage());
-            return new ArrayList<>();
+            System.err.println("Hasta belirtisi silinirken hata: " + e.getMessage());
+            e.printStackTrace();
+            return false;
         }
     }
 }

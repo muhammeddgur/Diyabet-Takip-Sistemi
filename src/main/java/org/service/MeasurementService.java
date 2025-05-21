@@ -1,11 +1,11 @@
 package org.service;
 
-import org.dao.MeasurementDao;
-import org.dao.IMeasurementDao;
 import org.dao.AlertDao;
 import org.dao.AlertTypeDao;
 import org.dao.BloodSugarCategoryDao;
+import org.dao.IMeasurementDao;
 import org.dao.InsulinReferenceDao;
+import org.dao.MeasurementDao;
 import org.model.Alert;
 import org.model.AlertType;
 import org.model.BloodSugarCategory;
@@ -18,8 +18,6 @@ import org.util.ValidationUtil;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -95,7 +93,7 @@ public class MeasurementService {
             boolean saved = measurementDao.save(measurement);
 
             if (saved) {
-                // Ölçüm eşiklerini kontrol et
+                // Ölçüm eşiklerini kontrol et ve gerekli uyarıları oluştur
                 checkMeasurementThresholds(measurement);
 
                 // Eğer geçersiz zamanda ölçüm yapıldıysa, uyarı oluştur
@@ -109,6 +107,7 @@ public class MeasurementService {
             return false;
         } catch (SQLException e) {
             System.err.println("Ölçüm ekleme sırasında bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return false;
         }
     }
@@ -125,7 +124,42 @@ public class MeasurementService {
             return measurementDao.findByDateRange(patientId, date, date);
         } catch (SQLException e) {
             System.err.println("Günlük ölçümler getirilirken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Hastanın en son kan şekeri ölçümünü alır
+     *
+     * @param patientId Hasta ID
+     * @return Son ölçüm veya null
+     */
+    public BloodSugarMeasurement getLatestMeasurement(Integer patientId) {
+        try {
+            List<BloodSugarMeasurement> measurements = getLatestMeasurements(patientId, 1);
+            return measurements.isEmpty() ? null : measurements.get(0);
+        } catch (Exception e) {
+            System.err.println("Son ölçüm alınırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Hastanın en son N adet kan şekeri ölçümünü alır
+     *
+     * @param patientId Hasta ID
+     * @param count Kaç adet ölçüm alınacağı
+     * @return Son ölçümler listesi
+     * @throws SQLException Veritabanı hatası durumunda
+     */
+    public List<BloodSugarMeasurement> getLatestMeasurements(Integer patientId, int count) throws SQLException {
+        try {
+            return measurementDao.getLastMeasurements(patientId, count);
+        } catch (SQLException e) {
+            System.err.println("Son ölçümler alınırken hata: " + e.getMessage());
+            throw e;
         }
     }
 
@@ -140,10 +174,11 @@ public class MeasurementService {
         try {
             List<BloodSugarMeasurement> allMeasurements = measurementDao.findByDateRange(patientId, date, date);
             return allMeasurements.stream()
-                    .filter(m -> m.getIs_valid_time() != null && m.getIs_valid_time())
+                    .filter(m -> Boolean.TRUE.equals(m.getIs_valid_time()))
                     .collect(Collectors.toList());
         } catch (SQLException e) {
             System.err.println("Geçerli günlük ölçümler getirilirken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return new ArrayList<>();
         }
     }
@@ -156,7 +191,7 @@ public class MeasurementService {
      */
     public List<BloodSugarMeasurement> getWeeklyMeasurements(Integer patientId) {
         // DateTimeUtil kullanarak hafta başlangıç ve bitiş tarihlerini al
-        List<LocalDate> weekStartAndEnd = DateTimeUtil.getWeekStartAndEnd(null);
+        List<LocalDate> weekStartAndEnd = DateTimeUtil.getWeekStartAndEnd(LocalDate.now());
         LocalDate startDate = weekStartAndEnd.get(0);
         LocalDate endDate = weekStartAndEnd.get(1);
 
@@ -164,6 +199,7 @@ public class MeasurementService {
             return measurementDao.findByDateRange(patientId, startDate, endDate);
         } catch (SQLException e) {
             System.err.println("Haftalık ölçümler getirilirken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return new ArrayList<>();
         }
     }
@@ -184,6 +220,7 @@ public class MeasurementService {
             return measurementDao.findByDateRange(patientId, startDate, endDate);
         } catch (SQLException e) {
             System.err.println("Aylık ölçümler getirilirken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return new ArrayList<>();
         }
     }
@@ -200,7 +237,57 @@ public class MeasurementService {
             return measurementDao.getDailyAverage(patientId, date);
         } catch (SQLException e) {
             System.err.println("Günlük ortalama hesaplanırken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return 0;
+        }
+    }
+
+    /**
+     * Belirli bir zaman dilimindeki ölçümleri getirir.
+     *
+     * @param patientId Hasta ID
+     * @param period Zaman dilimi (sabah, ogle, ikindi, aksam, gece)
+     * @return Ölçüm listesi
+     */
+    public List<BloodSugarMeasurement> getMeasurementsByPeriod(Integer patientId, String period) {
+        try {
+            return measurementDao.findByPeriod(patientId, period);
+        } catch (SQLException e) {
+            System.err.println("Zaman dilimine göre ölçümler alınırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Geçerli saatlerde yapılan ölçümleri getirir
+     *
+     * @param patientId Hasta ID
+     * @return Geçerli saatlerde yapılan ölçümler listesi
+     */
+    public List<BloodSugarMeasurement> getValidTimeMeasurements(Integer patientId) {
+        try {
+            return ((MeasurementDao) measurementDao).getValidTimeMeasurements(patientId);
+        } catch (SQLException e) {
+            System.err.println("Geçerli zaman ölçümleri alınırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Geçersiz saatlerde yapılan ölçümleri getirir
+     *
+     * @param patientId Hasta ID
+     * @return Geçersiz saatlerde yapılan ölçümler listesi
+     */
+    public List<BloodSugarMeasurement> getInvalidTimeMeasurements(Integer patientId) {
+        try {
+            return ((MeasurementDao) measurementDao).getInvalidTimeMeasurements(patientId);
+        } catch (SQLException e) {
+            System.err.println("Geçersiz zaman ölçümleri alınırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
         }
     }
 
@@ -210,14 +297,19 @@ public class MeasurementService {
      * @param measurement Kontrol edilecek ölçüm
      */
     public void checkMeasurementThresholds(BloodSugarMeasurement measurement) {
-        // Düşük kan şekeri kontrolü
-        if (measurement.getOlcum_degeri() < 70) {
-            alertService.checkLowBloodSugar(measurement);
-        }
+        try {
+            // Düşük kan şekeri kontrolü
+            if (measurement.getOlcum_degeri() < 70) {
+                alertService.checkLowBloodSugar(measurement);
+            }
 
-        // Yüksek kan şekeri kontrolü
-        if (measurement.getOlcum_degeri() > 200) {
-            alertService.checkHighBloodSugar(measurement);
+            // Yüksek kan şekeri kontrolü
+            if (measurement.getOlcum_degeri() > 200) {
+                alertService.checkHighBloodSugar(measurement);
+            }
+        } catch (Exception e) {
+            System.err.println("Ölçüm eşikleri kontrol edilirken hata: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -278,6 +370,7 @@ public class MeasurementService {
             return category != null ? category.getCategory_id() : null;
         } catch (SQLException e) {
             System.err.println("Kategori ID belirlenirken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }
@@ -293,6 +386,7 @@ public class MeasurementService {
             return reference != null ? reference.getInsulin_dose() : null;
         } catch (SQLException e) {
             System.err.println("İnsülin miktarı belirlenirken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }

@@ -26,6 +26,8 @@ public class RecommendationRuleDao implements IRecommendationRuleDao {
         symptomDao = new SymptomDao();
     }
 
+
+
     @Override
     public RecommendationRule findById(Integer id) throws SQLException {
         String sql = "SELECT * FROM recommendation_rules WHERE rule_id = ?";

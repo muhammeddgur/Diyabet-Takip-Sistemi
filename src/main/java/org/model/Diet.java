@@ -41,10 +41,6 @@ public class Diet {
 
     @Override
     public String toString() {
-        return "Diet{" +
-                "diet_id=" + diet_id +
-                ", diet_adi='" + diet_adi + '\'' +
-                ", aciklama='" + aciklama + '\'' +
-                '}';
+        return diet_adi;
     }
 }

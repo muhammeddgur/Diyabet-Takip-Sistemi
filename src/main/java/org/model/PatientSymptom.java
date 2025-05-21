@@ -1,32 +1,16 @@
 package org.model;
 
-import org.util.DateTimeUtil;
-
 import java.time.LocalDate;
 
-/**
- * Hasta ve belirtisi arasındaki ilişkiyi temsil eden sınıf
- */
 public class PatientSymptom {
     private Integer patient_symptom_id;
     private Integer patient_id;
     private Integer symptom_id;
     private LocalDate belirtilme_tarihi;
 
-    // Lazy loading için
+    // İlişkili nesneler
     private Patient patient;
     private Symptom symptom;
-
-    // Constructors
-    public PatientSymptom() {
-        this.belirtilme_tarihi = DateTimeUtil.getCurrentDate();
-    }
-
-    public PatientSymptom(Integer patient_id, Integer symptom_id, LocalDate belirtilme_tarihi) {
-        this.patient_id = patient_id;
-        this.symptom_id = symptom_id;
-        this.belirtilme_tarihi = belirtilme_tarihi != null ? belirtilme_tarihi : DateTimeUtil.getCurrentDate();
-    }
 
     // Getters and Setters
     public Integer getPatient_symptom_id() {
@@ -67,7 +51,9 @@ public class PatientSymptom {
 
     public void setPatient(Patient patient) {
         this.patient = patient;
-        this.patient_id = patient != null ? patient.getPatient_id() : null;
+        if (patient != null) {
+            this.patient_id = patient.getPatient_id();
+        }
     }
 
     public Symptom getSymptom() {
@@ -76,16 +62,8 @@ public class PatientSymptom {
 
     public void setSymptom(Symptom symptom) {
         this.symptom = symptom;
-        this.symptom_id = symptom != null ? symptom.getSymptom_id() : null;
-    }
-
-    @Override
-    public String toString() {
-        return "PatientSymptom{" +
-                "patient_symptom_id=" + patient_symptom_id +
-                ", patient_id=" + patient_id +
-                ", symptom_id=" + symptom_id +
-                ", belirtilme_tarihi=" + belirtilme_tarihi +
-                '}';
+        if (symptom != null) {
+            this.symptom_id = symptom.getSymptom_id();
+        }
     }
 }

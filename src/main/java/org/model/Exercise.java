@@ -41,10 +41,6 @@ public class Exercise {
 
     @Override
     public String toString() {
-        return "Exercise{" +
-                "exercise_id=" + exercise_id +
-                ", exercise_adi='" + exercise_adi + '\'' +
-                ", aciklama='" + aciklama + '\'' +
-                '}';
+        return exercise_adi;
     }
 }

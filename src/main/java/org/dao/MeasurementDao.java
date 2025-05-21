@@ -324,6 +324,18 @@ public class MeasurementDao implements IMeasurementDao {
         return measurements;
     }
 
+    /**
+     * Hastanın en son N adet kan şekeri ölçümünü alır - İlave metot
+     *
+     * @param patientId Hasta ID
+     * @param count Kaç adet ölçüm alınacağı
+     * @return Son ölçümler listesi
+     * @throws SQLException Veritabanı hatası durumunda
+     */
+    public List<BloodSugarMeasurement> findLatestMeasurements(Integer patientId, int count) throws SQLException {
+        return getLastMeasurements(patientId, count);
+    }
+
     // ResultSet'ten BloodSugarMeasurement nesnesine dönüştürme yardımcı metodu
     private BloodSugarMeasurement mapResultSetToMeasurement(ResultSet rs) throws SQLException {
         BloodSugarMeasurement measurement = new BloodSugarMeasurement();

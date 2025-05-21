@@ -7,6 +7,9 @@ import org.ui.MainFrame;
 
 import javax.swing.*;
 
+//  AYNI BELİRTİ AYNI GÜN SEÇİLİP EKLENEBİLİYOR
+
+
 /**
  * Diyabet Takip Sistemi'nin başlatıldığı ana sınıf
  */
