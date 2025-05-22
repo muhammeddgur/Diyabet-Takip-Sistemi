@@ -81,14 +81,6 @@ public class MeasurementService {
                 measurement.setCategory_id(category.getCategory_id());
             }
 
-            // İnsülin miktarını belirle
-            if (measurement.getIs_valid_time()) {
-                InsulinReference reference = insulinReferenceDao.findByBloodSugarValue(measurement.getOlcum_degeri());
-                if (reference != null) {
-                    measurement.setInsulin_miktari(reference.getInsulin_dose());
-                }
-            }
-
             // Ölçümü kaydet
             boolean saved = measurementDao.save(measurement);
 

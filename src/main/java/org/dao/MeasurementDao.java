@@ -244,6 +244,37 @@ public class MeasurementDao implements IMeasurementDao {
         return average;
     }
 
+    public void updateInsulinAmount(Integer measurementId, Double insulinAmount) throws SQLException {
+        String sql = "UPDATE blood_sugar_measurements SET insülin_miktari = ? WHERE measurement_id = ?";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setDouble(1, insulinAmount);
+            stmt.setInt(2, measurementId);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Ölçüm güncellenemedi, böyle bir ID bulunamadı: " + measurementId);
+            }
+        }
+    }
+    public void updateFlag(Integer measurementId) throws SQLException {
+        String sql = "UPDATE blood_sugar_measurements SET is_valid_time = ? WHERE measurement_id = ?";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setBoolean(1, true);
+            stmt.setInt(2, measurementId);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Ölçüm güncellenemedi, böyle bir ID bulunamadı: " + measurementId);
+            }
+        }
+    }
+
     @Override
     public List<BloodSugarMeasurement> getLastMeasurements(Integer patientId, int count) throws SQLException {
         String sql = "SELECT * FROM blood_sugar_measurements WHERE patient_id = ? ORDER BY olcum_tarihi DESC LIMIT ?";

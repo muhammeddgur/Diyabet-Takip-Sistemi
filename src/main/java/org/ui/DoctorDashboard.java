@@ -1,9 +1,6 @@
 package org.ui;
 
-import org.dao.DietDao;
-import org.dao.DoctorDao;
-import org.dao.ExerciseDao;
-import org.dao.MeasurementDao;
+import org.dao.*;
 import org.model.*;
 import org.service.*;
 import org.util.DateTimeUtil;
@@ -292,16 +289,33 @@ public class DoctorDashboard extends JPanel {
 
             // Ölçüm nesnesi oluştur
             BloodSugarMeasurement measurement = new BloodSugarMeasurement();
+            measurement.setPatient(selectedPatient);
             measurement.setPatient_id(selectedPatient.getPatient_id());
             measurement.setOlcum_degeri(value);
             measurement.setOlcum_zamani(periodText);
             measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime()); // Şu anki tarih ve saat
-            Double tempInsulin;
 
             measurement.setInsulin_miktari(0.0);
 
+
             //Service aracılığıyla Dao kullanarak tabloya ekler
             boolean success = measurementService.addMeasurement(measurement);
+
+            MeasurementDao measurementDao = new MeasurementDao();
+            InsulinReferenceDao insulinReferenceDao = new InsulinReferenceDao();
+            // SQLException'i ele alıyoruz
+            try {
+                measurementDao.updateFlag(measurement.getMeasurement_id());
+                int averageValue =(int) measurementDao.getDailyAverage(measurement.getPatient_id(), measurement.getOlcum_tarihi().toLocalDate());
+                InsulinReference insulinReference = insulinReferenceDao.findByBloodSugarValue(averageValue);
+                measurement.setInsulin_miktari(insulinReference.getInsulin_dose());
+                measurementDao.updateInsulinAmount(measurement.getMeasurement_id(),insulinReference.getInsulin_dose());
+
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Veritabanı hatası: " + e.getMessage(), "Veritabanı Hatası", JOptionPane.ERROR_MESSAGE);
+                e.printStackTrace(); // Loglama için
+                return; // Hata durumunda işlemi sonlandır
+            }
 
             if (success) {
                 JOptionPane.showMessageDialog(this,
