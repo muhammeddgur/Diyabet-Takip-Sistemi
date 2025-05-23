@@ -225,11 +225,11 @@ public class DoctorDashboard extends JPanel {
 
         gbc.gridx = 1;
         periodCombo = new JComboBox<>(new String[] {
-                "Sabah (07:00-09:00)",
-                "Öğle (12:00-14:00)",
-                "İkindi (15:00-17:00)",
-                "Akşam (18:00-20:00)",
-                "Gece (22:00-24:00)"
+                "Sabah (07:00-08:00)",
+                "Öğle (12:00-13:00)",
+                "İkindi (15:00-16:00)",
+                "Akşam (18:00-19:00)",
+                "Gece (22:00-23:00)"
         });
         formPanel.add(periodCombo, gbc);
 

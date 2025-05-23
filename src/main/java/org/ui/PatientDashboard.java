@@ -1,23 +1,31 @@
 package org.ui;
 
+import org.dao.InsulinReferenceDao;
+import org.dao.MeasurementDao;
 import org.model.*;
 import org.service.*;
+import org.util.DateTimeUtil;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.sql.SQLException;
 
 /**
  * Hasta kontrol paneli
  */
 public class PatientDashboard extends JPanel {
     private User currentUser;
+    private Patient patient;
     private AuthenticationService authService;
     private PatientService patientService;
     private MeasurementService measurementService;
     private DietService dietService;
     private ExerciseService exerciseService;
     private MainFrame parent;
+
+    JTextField measurementField;
+    JComboBox<String> periodCombo;
 
     private JLabel welcomeLabel;
     private JButton logoutButton;
@@ -27,6 +35,7 @@ public class PatientDashboard extends JPanel {
         this.currentUser = user;
         this.authService = authService;
         this.patientService = patientService;
+        this.patient = patientService.getPatientByUserId(this.currentUser.getUser_id());
         this.measurementService = new MeasurementService();
         this.dietService = new DietService();
         this.exerciseService = new ExerciseService();
@@ -185,7 +194,7 @@ public class PatientDashboard extends JPanel {
         formPanel.add(new JLabel("Ölçüm Değeri (mg/dL):"), gbc);
 
         gbc.gridx = 1;
-        JTextField measurementField = new JTextField(10);
+        measurementField = new JTextField(10);
         formPanel.add(measurementField, gbc);
 
         // Periyot
@@ -195,13 +204,13 @@ public class PatientDashboard extends JPanel {
 
         gbc.gridx = 1;
         String[] periods = {
-                "Sabah (07:00-09:00)",
-                "Öğle (12:00-14:00)",
-                "İkindi (15:00-17:00)",
-                "Akşam (18:00-20:00)",
-                "Gece (22:00-24:00)"
+                "Sabah (07:00-08:00)",
+                "Öğle (12:00-13:00)",
+                "İkindi (15:00-16:00)",
+                "Akşam (18:00-19:00)",
+                "Gece (22:00-23:00)"
         };
-        JComboBox<String> periodCombo = new JComboBox<>(periods);
+        periodCombo = new JComboBox<>(periods);
         formPanel.add(periodCombo, gbc);
 
         // Ekle butonu
@@ -210,27 +219,7 @@ public class PatientDashboard extends JPanel {
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
         JButton addButton = new JButton("Ölçümü Kaydet");
-        addButton.addActionListener(e -> {
-            try {
-                double value = Double.parseDouble(measurementField.getText().trim());
-                if (value <= 0 || value > 600) {
-                    throw new NumberFormatException();
-                }
-
-                // Ölçüm kaydetme simülasyonu
-                JOptionPane.showMessageDialog(panel,
-                        "Ölçüm başarıyla kaydedildi.\nDeğer: " + value + " mg/dL\nZaman: " + periodCombo.getSelectedItem(),
-                        "Başarılı",
-                        JOptionPane.INFORMATION_MESSAGE);
-
-                measurementField.setText("");
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(panel,
-                        "Lütfen geçerli bir ölçüm değeri girin (1-600 arası).",
-                        "Hatalı Değer",
-                        JOptionPane.ERROR_MESSAGE);
-            }
-        });
+        addButton.addActionListener(e -> addMeasurement());
         formPanel.add(addButton, gbc);
 
         panel.add(formPanel, BorderLayout.NORTH);
@@ -247,6 +236,84 @@ public class PatientDashboard extends JPanel {
         panel.add(scrollPane, BorderLayout.CENTER);
 
         return panel;
+    }
+
+    /**
+     * Ölçüm ekleme işlemini gerçekleştirir
+     */
+    //Kan şekeri ölçüm değerleri tabloya burada kaydedilir
+    private void addMeasurement() {
+        // Form kontrolü
+        String valueStr = measurementField.getText().trim();
+        if (valueStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Lütfen ölçüm değerini girin!", "Form Hatası", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        try {
+            int value = Integer.parseInt(valueStr);
+            if (value <= 0 || value >= 1000) {
+                throw new NumberFormatException();
+            }
+
+            String periodText = (String) periodCombo.getSelectedItem();
+
+            // Ölçüm nesnesi oluştur
+            BloodSugarMeasurement measurement = new BloodSugarMeasurement();
+            measurement.setPatient(patient);
+            measurement.setPatient_id(patient.getPatient_id());
+            measurement.setOlcum_degeri(value);
+            measurement.setOlcum_zamani(periodText);
+            measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime()); // Şu anki tarih ve saat
+
+            measurement.setInsulin_miktari(0.0);
+
+
+            //Service aracılığıyla Dao kullanarak tabloya ekler
+            boolean success = measurementService.addMeasurement(measurement);
+
+            MeasurementDao measurementDao = new MeasurementDao();
+            InsulinReferenceDao insulinReferenceDao = new InsulinReferenceDao();
+            // SQLException'i ele alıyoruz
+            try {
+                measurementDao.updateFlag(measurement.getMeasurement_id());
+                int averageValue =(int) measurementDao.getDailyAverage(measurement.getPatient_id(), measurement.getOlcum_tarihi().toLocalDate());
+                InsulinReference insulinReference = insulinReferenceDao.findByBloodSugarValue(averageValue);
+                measurement.setInsulin_miktari(insulinReference.getInsulin_dose());
+                measurementDao.updateInsulinAmount(measurement.getMeasurement_id(),insulinReference.getInsulin_dose());
+
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Veritabanı hatası: " + e.getMessage(), "Veritabanı Hatası", JOptionPane.ERROR_MESSAGE);
+                e.printStackTrace(); // Loglama için
+                return; // Hata durumunda işlemi sonlandır
+            }
+
+            if (success) {
+                JOptionPane.showMessageDialog(this,
+                        "Kan şekeri ölçümü başarıyla kaydedildi.",
+                        "İşlem Başarılı",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                // Form alanlarını temizle
+                measurementField.setText("");
+                periodCombo.setSelectedIndex(0);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Ölçüm kaydedilirken bir hata oluştu.",
+                        "Kayıt Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+
+            // Form alanlarını temizle
+            measurementField.setText("");
+            periodCombo.setSelectedIndex(0);
+
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Ölçüm değeri 1-999 arasında bir sayı olmalıdır!",
+                    "Doğrulama Hatası",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**

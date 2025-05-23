@@ -64,13 +64,13 @@ public class DateTimeUtil {
 
         if (hour >= 7 && hour < 9) {
             return "MORNING";
-        } else if (hour >= 12 && hour < 14) {
+        } else if (hour >= 12 && hour < 13) {
             return "NOON";
-        } else if (hour >= 15 && hour < 17) {
+        } else if (hour >= 15 && hour < 16) {
             return "AFTERNOON";
-        } else if (hour >= 18 && hour < 20) {
+        } else if (hour >= 18 && hour < 19) {
             return "EVENING";
-        } else if (hour >= 22 && hour < 24) {
+        } else if (hour >= 22 && hour < 23) {
             return "NIGHT";
         } else {
             return "OTHER";
