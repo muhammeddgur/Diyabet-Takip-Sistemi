@@ -56,7 +56,7 @@ public class PatientService {
      * @param patient Eklenecek hasta bilgileri
      * @return İşlem başarılı ise eklenen hasta, değilse null
      */
-    public Patient addPatient(Patient patient,String tempUnhashedPassword) {
+    public Patient addPatient(Patient patient, String tempUnhashedPassword) {
         try {
             // TC kimlik formatını doğrula
             if (!ValidationUtil.validateTcKimlik(patient.getTc_kimlik())) {
@@ -81,10 +81,17 @@ public class PatientService {
                 return null;
             }
 
-            // Kullanıcı daha önce kaydedilmiş mi kontrol et
+            // TC Kimlik numarası kontrolü
             User existingUser = userDao.findByTcKimlik(patient.getTc_kimlik());
             if (existingUser != null) {
                 System.err.println("Bu TC kimlik numarası ile kayıtlı bir kullanıcı zaten var.");
+                return null;
+            }
+
+            // E-posta kontrolü
+            User existingEmailUser = userDao.findByEmail(patient.getEmail());
+            if (existingEmailUser != null) {
+                System.err.println("Bu e-posta adresi ile kayıtlı bir kullanıcı zaten var.");
                 return null;
             }
 
@@ -94,7 +101,7 @@ public class PatientService {
                 return null;
             }
 
-            // *** BU NOKTAYA EKLEYIN - Şifre hashleme kodu ***
+            // Şifre hashleme kodu
             if (!patient.getPassword().startsWith("$2a$")) {
                 try {
                     String hashedPassword = PasswordUtil.hashPassword(patient.getPassword());

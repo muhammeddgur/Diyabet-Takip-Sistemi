@@ -41,10 +41,6 @@ public class Symptom {
 
     @Override
     public String toString() {
-        return "Symptom{" +
-                "symptom_id=" + symptom_id +
-                ", symptom_adi='" + symptom_adi + '\'' +
-                ", aciklama='" + aciklama + '\'' +
-                '}';
+        return symptom_adi;
     }
 }

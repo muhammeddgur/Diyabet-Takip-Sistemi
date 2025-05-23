@@ -52,9 +52,9 @@ public class MainFrame extends JFrame {
     private void setupFrame() {
         setTitle("Diyabet Takip Sistemi");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(500, 600);
+        setSize(800, 700);
         setLocationRelativeTo(null); // Ekranın ortasında
-        setResizable(false);
+        setResizable(true);
     }
 
     /**
