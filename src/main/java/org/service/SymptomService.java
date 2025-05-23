@@ -78,6 +78,21 @@ public class SymptomService {
     }
 
     /**
+     * Belirli bir belirtiye sahip tüm hastaların ID'lerini getirir
+     * @param symptomName Belirti adı
+     * @return Hasta ID'leri listesi
+     */
+    public List<Integer> findPatientIdsBySymptomName(String symptomName) {
+        try {
+            return symptomDao.findPatientIdsBySymptomName(symptomName);
+        } catch (SQLException e) {
+            System.err.println("Belirtiye göre hasta ID'leri alınırken hata: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    /**
      * Belirti adına göre belirtiyi bulur veya yoksa yeni oluşturur
      * @param symptomName Belirti adı
      * @param description Açıklama

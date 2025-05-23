@@ -399,4 +399,26 @@ public class MeasurementDao implements IMeasurementDao {
 
         return measurement;
     }
+
+    /**
+     * Hastanın son ölçüm değerini getirir
+     * @param patientId Hasta ID
+     * @return Son ölçüm değeri veya null
+     */
+    public Integer getLastMeasurementValue(Integer patientId) throws SQLException {
+        String query = "SELECT olcum_degeri FROM blood_sugar_measurements " +
+                "WHERE patient_id = ? ORDER BY olcum_tarihi DESC LIMIT 1";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
+            stmt.setInt(1, patientId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("olcum_degeri");
+                }
+            }
+        }
+        return null;
+    }
 }

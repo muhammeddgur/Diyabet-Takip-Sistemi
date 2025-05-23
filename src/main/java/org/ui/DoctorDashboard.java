@@ -37,6 +37,10 @@ public class DoctorDashboard extends JPanel {
     private SymptomService symptomService;
     private DietDao dietDao;
     private ExerciseDao exerciseDao;
+    private int bloodSugarValue = 0; // Ölçüm değeri
+    private String bloodSugarPeriod = ""; // Zaman dilimi (sabah, öğle, vb.)
+    private boolean hasBloodSugarMeasurement = false; // Ölçüm girildi mi?
+    private JLabel currentMeasurementLabel; // Mevcut kan şekeri ölçüm bilgisi
 
 
     // Kart layout ve panel referansları
@@ -76,7 +80,6 @@ public class DoctorDashboard extends JPanel {
     private JComboBox<String> cinsiyetCombo;
     private JPasswordField passwordField;
     // Hasta ekleme form alanları - yeni eklenenler
-    private JTextField bloodSugarAverageField; // Ortalama kan şekeri değeri
     private JComboBox<Symptom> addPatientSymptomCombo; // Belirti seçimi için ComboBox
     private JTable addPatientSymptomsTable; // Belirtiler tablosu
     private DefaultTableModel addPatientSymptomsModel; // Belirtiler tablo modeli
@@ -391,17 +394,17 @@ public class DoctorDashboard extends JPanel {
 
         mainPanel.add(symptomsPanel);
 
-        // 3. BÖLÜM: KAN ŞEKERİ ÖLÇÜM DEĞERLERİ
+// 3. BÖLÜM: KAN ŞEKERİ ÖLÇÜM DEĞERLERİ
         JPanel bloodSugarPanel = new JPanel(new BorderLayout(5, 5));
-        bloodSugarPanel.setBorder(BorderFactory.createTitledBorder("Kan Şekeri Ölçümleri"));
+        bloodSugarPanel.setBorder(BorderFactory.createTitledBorder("Kan Şekeri Ölçümü"));
 
-        // Üst kısmı düzenle - Grid yerine daha esnek bir düzen
+// Üst kısmı düzenle - Grid yerine daha esnek bir düzen
         JPanel bloodSugarInputPanel = new JPanel(new GridBagLayout());
         GridBagConstraints bloodSugarGbc = new GridBagConstraints();
         bloodSugarGbc.fill = GridBagConstraints.HORIZONTAL;
         bloodSugarGbc.insets = new Insets(5, 5, 5, 5);
 
-        // Zaman dilimi seçimi
+// Zaman dilimi seçimi
         bloodSugarGbc.gridx = 0;
         bloodSugarGbc.gridy = 0;
         bloodSugarInputPanel.add(new JLabel("Zaman Dilimi:"), bloodSugarGbc);
@@ -416,7 +419,7 @@ public class DoctorDashboard extends JPanel {
         });
         bloodSugarInputPanel.add(periodCombo, bloodSugarGbc);
 
-        // Ölçüm değeri girişi
+// Ölçüm değeri girişi
         bloodSugarGbc.gridx = 0;
         bloodSugarGbc.gridy = 1;
         bloodSugarInputPanel.add(new JLabel("Ölçüm Değeri (mg/dL):"), bloodSugarGbc);
@@ -425,29 +428,19 @@ public class DoctorDashboard extends JPanel {
         measurementValueField = new JTextField(10);
         bloodSugarInputPanel.add(measurementValueField, bloodSugarGbc);
 
-        // Ortalama değer gösterimi
+    // Mevcut ölçüm bilgisi (varsa gösterilecek)
         bloodSugarGbc.gridx = 0;
         bloodSugarGbc.gridy = 2;
-        bloodSugarInputPanel.add(new JLabel("Günlük Ortalama:"), bloodSugarGbc);
+        bloodSugarGbc.gridwidth = 2;
+        currentMeasurementLabel = new JLabel("Henüz ölçüm girilmedi");  // DÜZELTME
+        bloodSugarInputPanel.add(currentMeasurementLabel, bloodSugarGbc);
 
-        bloodSugarGbc.gridx = 1;
-        bloodSugarAverageField = new JTextField(10);
-        bloodSugarAverageField.setEditable(false);
-        bloodSugarInputPanel.add(bloodSugarAverageField, bloodSugarGbc);
+        bloodSugarPanel.add(bloodSugarInputPanel, BorderLayout.CENTER);
 
-        bloodSugarPanel.add(bloodSugarInputPanel, BorderLayout.NORTH);
-
-
-        bloodSugarTableModel = new DefaultTableModel(new String[]{"Zaman Dilimi", "Ölçüm Değeri (mg/dL)"}, 0);
-        JTable bloodSugarTable = new JTable(bloodSugarTableModel);
-        JScrollPane tableScrollPane = new JScrollPane(bloodSugarTable);
-        tableScrollPane.setPreferredSize(new Dimension(400, 100));
-        bloodSugarPanel.add(tableScrollPane, BorderLayout.CENTER);
-
-        // Buton Paneli
+// Buton Paneli
         JPanel bloodSugarButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
 
-        // Ölçümü Kaydet butonu
+// Ölçümü Kaydet butonu
         JButton addMeasurementButton = new JButton("Ölçümü Kaydet");
         addMeasurementButton.addActionListener(e -> {
             String valueStr = measurementValueField.getText().trim();
@@ -467,54 +460,18 @@ public class DoctorDashboard extends JPanel {
 
                 String periodText = (String) periodCombo.getSelectedItem();
 
-                // Aynı zaman dilimi için önceki kaydı bul
-                TempMeasurement newMeasurement = new TempMeasurement(value, periodText);
-                int existingIndex = -1;
+                // Değerleri doğrudan sakla
+                bloodSugarValue = value;
+                bloodSugarPeriod = periodText;
+                hasBloodSugarMeasurement = true;
 
-                for (int i = 0; i < tempBloodSugarMeasurements.size(); i++) {
-                    TempMeasurement measurement = tempBloodSugarMeasurements.get(i);
-                    if (measurement.getPeriod().equals(periodText)) {
-                        existingIndex = i;
-                        break;
-                    }
-                }
+                // Kullanıcıya bilgi ver
+                currentMeasurementLabel.setText("Mevcut ölçüm: " + value + " mg/dL (" + periodText + ")");
 
-                // Eğer aynı zaman dilimi için kayıt varsa, güncelle
-                if (existingIndex >= 0) {
-                    tempBloodSugarMeasurements.set(existingIndex, newMeasurement);
-
-                    // Tablodaki ilgili satırı güncelle
-                    for (int i = 0; i < bloodSugarTableModel.getRowCount(); i++) {
-                        if (bloodSugarTableModel.getValueAt(i, 0).equals(periodText)) {
-                            bloodSugarTableModel.setValueAt(value, i, 1);
-                            break;
-                        }
-                    }
-
-                    JOptionPane.showMessageDialog(bloodSugarPanel,
-                            periodText + " için önceki değer güncellendi.",
-                            "Değer Güncellendi",
-                            JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    // Yeni bir zaman dilimi için kayıt ekle
-                    tempBloodSugarMeasurements.add(newMeasurement);
-                    bloodSugarTableModel.addRow(new Object[]{periodText, value});
-
-                    JOptionPane.showMessageDialog(bloodSugarPanel,
-                            "Yeni ölçüm geçici olarak kaydedildi. Hasta kayıt işlemi tamamlandığında veritabanına eklenecektir.",
-                            "İşlem Başarılı",
-                            JOptionPane.INFORMATION_MESSAGE);
-                }
-
-                // Ortalamayı hesapla ve göster
-                if (!tempBloodSugarMeasurements.isEmpty()) {
-                    int sum = 0;
-                    for (TempMeasurement measurement : tempBloodSugarMeasurements) {
-                        sum += measurement.getValue();
-                    }
-                    double average = (double) sum / tempBloodSugarMeasurements.size();
-                    bloodSugarAverageField.setText(String.format("%.1f", average));
-                }
+                JOptionPane.showMessageDialog(bloodSugarPanel,
+                        "Ölçüm değeri kaydedildi: " + value + " mg/dL (" + periodText + ")",
+                        "İşlem Başarılı",
+                        JOptionPane.INFORMATION_MESSAGE);
 
                 // Form alanını temizle
                 measurementValueField.setText("");
@@ -669,10 +626,6 @@ public class DoctorDashboard extends JPanel {
                 throw new NumberFormatException();
             }
 
-            // Geçici olarak ortalama değeri saklayalım
-            // Burada tek bir ölçüm olduğu için değerin kendisi ortalama olacak
-            bloodSugarAverageField.setText(String.valueOf(value));
-
             JOptionPane.showMessageDialog(this,
                     "Ölçüm değeri geçici olarak kaydedildi.\nHasta kaydı tamamlandığında veritabanına eklenecektir.",
                     "İşlem Başarılı",
@@ -691,9 +644,9 @@ public class DoctorDashboard extends JPanel {
 
     private void generateRecommendations() {
         // Kan şekeri kontrolü
-        if (bloodSugarAverageField.getText().trim().isEmpty()) {
+        if (!hasBloodSugarMeasurement) {
             JOptionPane.showMessageDialog(this,
-                    "Lütfen önce kan şekeri değerlerini hesaplayın.",
+                    "Lütfen önce kan şekeri ölçümü yapın.",
                     "Uyarı",
                     JOptionPane.WARNING_MESSAGE);
             return;
@@ -715,14 +668,8 @@ public class DoctorDashboard extends JPanel {
                 symptomNames.add((String) addPatientSymptomsModel.getValueAt(i, 0));
             }
 
-            // Kan şekeri ortalaması - DÜZELTME
-            String bloodSugarText = bloodSugarAverageField.getText().trim();
-            // Değer virgülle yazılmış olabilir, noktaya çevir
-            bloodSugarText = bloodSugarText.replace(',', '.');
-
-            // Önce double olarak parse et, sonra yuvarla
-            double bloodSugarValue = Double.parseDouble(bloodSugarText);
-            int bloodSugar = (int) Math.round(bloodSugarValue);
+            // Kan şekeri değerini doğrudan kullan
+            int bloodSugar = bloodSugarValue;
 
             // Önerileri al
             Diet recommendedDiet = recommendationService.recommendDietBySymptoms(symptomNames, bloodSugar);
@@ -760,13 +707,6 @@ public class DoctorDashboard extends JPanel {
                 exerciseRecommendationLabel.setText("<html><b>Egzersiz Önerisi:</b> Öneri oluşturulamadı. Lütfen uygun bir egzersiz seçin.</html>");
             }
 
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Geçersiz kan şekeri değeri: " + bloodSugarAverageField.getText() +
-                            "\nLütfen önce ortalama hesaplayın.",
-                    "Hata",
-                    JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace(); // Hata detayını konsola yazdır
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                     "Öneriler oluşturulurken bir hata oluştu: " + e.getMessage(),
@@ -795,9 +735,9 @@ public class DoctorDashboard extends JPanel {
         }
 
         // 3. Kan şekeri değerini kontrol et
-        if (bloodSugarAverageField.getText().trim().isEmpty()) {
+        if (!hasBloodSugarMeasurement) {
             JOptionPane.showMessageDialog(this,
-                    "Lütfen kan şekeri değerlerini hesaplayın.",
+                    "Lütfen kan şekeri ölçümü yapın.",
                     "Uyarı",
                     JOptionPane.WARNING_MESSAGE);
             return;
@@ -887,37 +827,33 @@ public class DoctorDashboard extends JPanel {
                     );
                 }
 
-                // 8. Kan şekeri ölçümlerini ekle
-                for (TempMeasurement temp : tempBloodSugarMeasurements) {
+                // 8. Kan şekeri ölçümünü ekle
+                if (hasBloodSugarMeasurement) { // Ölçüm yapıldıysa
                     try {
                         BloodSugarMeasurement measurement = new BloodSugarMeasurement();
                         measurement.setPatient(addedPatient);
                         measurement.setPatient_id(addedPatient.getPatient_id());
-                        measurement.setOlcum_degeri(temp.getValue());
-                        measurement.setOlcum_zamani(temp.getPeriod());
+                        measurement.setOlcum_degeri(bloodSugarValue);
+                        measurement.setOlcum_zamani(bloodSugarPeriod);
                         measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime());
                         measurement.setIs_valid_time(true); // Geçerli ölçüm zamanı
-                        measurement.setInsulin_miktari(0.0); // Başlangıç değeri
 
                         // Ölçümü veritabanına kaydet
                         boolean success = measurementService.addMeasurement(measurement);
 
                         if (success) {
+                            System.out.println("Kan şekeri ölçümü kaydedildi: " + bloodSugarValue + " mg/dL");
+
+                            // İnsülin dozu hesaplama ve güncelleme
                             try {
-                                // İnsülin miktarını hesapla ve güncelle - mevcut addMeasurement metoduyla aynı mantık
                                 MeasurementDao measurementDao = new MeasurementDao();
                                 InsulinReferenceDao insulinReferenceDao = new InsulinReferenceDao();
 
                                 // Ölçüm geçerli olarak işaretlenir
                                 measurementDao.updateFlag(measurement.getMeasurement_id());
 
-                                // Günlük ortalamayı hesapla
-                                int averageValue = (int) measurementDao.getDailyAverage(
-                                        measurement.getPatient_id(),
-                                        measurement.getOlcum_tarihi().toLocalDate());
-
-                                // Ortalamaya göre insülin referansını bul
-                                InsulinReference insulinReference = insulinReferenceDao.findByBloodSugarValue(averageValue);
+                                // Kan şekeri değerine göre insülin referansını bul
+                                InsulinReference insulinReference = insulinReferenceDao.findByBloodSugarValue(bloodSugarValue);
 
                                 // İnsülin miktarını ayarla
                                 if (insulinReference != null) {
@@ -926,22 +862,13 @@ public class DoctorDashboard extends JPanel {
 
                                     // Veritabanında insülin miktarını güncelle
                                     measurementDao.updateInsulinAmount(measurement.getMeasurement_id(), insulinDose);
-
-                                    System.out.println("İnsülin dozu başarıyla kaydedildi: " + insulinDose +
-                                            " - Ölçüm ID: " + measurement.getMeasurement_id());
-                                } else {
-                                    System.err.println("Kan şekeri değeri için insülin referansı bulunamadı: " + averageValue);
                                 }
                             } catch (SQLException ex) {
-                                System.err.println("İnsülin miktarı kaydedilirken hata: " + ex.getMessage());
-                                ex.printStackTrace();
+                                System.err.println("İnsülin dozu kaydedilirken hata: " + ex.getMessage());
                             }
-                        } else {
-                            System.err.println("Ölçüm kaydedilemedi: " + temp.getValue() + " - " + temp.getPeriod());
                         }
                     } catch (Exception ex) {
                         System.err.println("Ölçüm kaydedilirken hata: " + ex.getMessage());
-                        ex.printStackTrace();
                     }
                 }
 
@@ -1056,11 +983,20 @@ public class DoctorDashboard extends JPanel {
         // Belirtiler
         addPatientSymptomsModel.setRowCount(0);
 
-        // Kan şekeri ölçümlerini sıfırla
-        tempBloodSugarMeasurements.clear();
-        bloodSugarTableModel.setRowCount(0);
-        bloodSugarAverageField.setText("");
+        // Kan şekeri ölçümünü sıfırla
+        bloodSugarValue = 0;
+        bloodSugarPeriod = "";
+        hasBloodSugarMeasurement = false;
         measurementValueField.setText("");
+        periodCombo.setSelectedIndex(0);
+
+        // Mevcut ölçüm bilgisini sıfırla - NULL KONTROLÜ EKLEYİN
+        if (currentMeasurementLabel != null) {  // Bu kontrolü ekleyin
+            currentMeasurementLabel.setText("Henüz ölçüm girilmedi");
+        }
+
+        // Mevcut ölçüm bilgisini sıfırla
+        currentMeasurementLabel.setText("Henüz ölçüm girilmedi");
 
         // Öneriler
         dietRecommendationLabel.setText("<html><b>Diyet Önerisi:</b> Henüz oluşturulmadı</html>");
@@ -1269,7 +1205,7 @@ public class DoctorDashboard extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(5, 5, 5, 5);
 
-        // Kan seviyesi filtresi
+        // Kan seviyesi filtresi - Bu kısım sabit kalabilir
         gbc.gridx = 0;
         gbc.gridy = 0;
         filterPanel.add(new JLabel("Kan Şekeri Seviyesi:"), gbc);
@@ -1284,15 +1220,25 @@ public class DoctorDashboard extends JPanel {
         });
         filterPanel.add(bloodLevelFilterCombo, gbc);
 
-        // Belirti filtresi
+        // Belirti filtresi - Veritabanından gerçek belirtileri al
         gbc.gridx = 0;
         gbc.gridy = 1;
         filterPanel.add(new JLabel("Hastalık Belirtisi:"), gbc);
 
         gbc.gridx = 1;
-        symptomFilterCombo = new JComboBox<>(new String[] {
-                "Tümü", "Yorgunluk", "Aşırı Susama", "Sık İdrara Çıkma", "Bulanık Görme", "Kilo Kaybı"
-        });
+
+        // Veritabanından tüm semptomları al
+        List<Symptom> allSymptoms = symptomService.getAllSymptoms();
+        List<String> symptomOptions = new ArrayList<>();
+        symptomOptions.add("Tümü");  // İlk seçenek her zaman "Tümü" olsun
+
+        // Tüm semptom adlarını listeye ekle
+        for (Symptom symptom : allSymptoms) {
+            symptomOptions.add(symptom.getSymptom_adi());
+        }
+
+        // Combobox'ı oluştur
+        symptomFilterCombo = new JComboBox<>(symptomOptions.toArray(new String[0]));
         filterPanel.add(symptomFilterCombo, gbc);
 
         // Filtreleri uygula/temizle butonları
@@ -1313,7 +1259,7 @@ public class DoctorDashboard extends JPanel {
 
         panel.add(filterPanel, BorderLayout.NORTH);
 
-        // Hasta tablosu
+        // Hasta tablosu - Bu kısım değişmiyor
         String[] columnNames = {
                 "TC Kimlik",
                 "Ad",
@@ -1321,7 +1267,7 @@ public class DoctorDashboard extends JPanel {
                 "E-posta",
                 "Cinsiyet",
                 "Son Ölçüm",
-                "Son Belirti"
+                "Belirti Sayısı"
         };
 
         patientTableModel = new DefaultTableModel(columnNames, 0) {
@@ -1390,11 +1336,118 @@ public class DoctorDashboard extends JPanel {
         JPanel analysisPanel = createAnalysisPanel();
         patientDetailTabs.addTab("İlişki Analizi", analysisPanel);
 
+        // YENİ: Diyet ve egzersiz takip sekmesi
+        JPanel dietExercisePanel = createDietExerciseTrackingPanel();
+        patientDetailTabs.addTab("Diyet ve Egzersiz Takibi", dietExercisePanel);
+
         // Uyarılar sekmesi - Hastaların güne göre uyarıları
         JPanel alertsPanel = createAlertsPanel();
         patientDetailTabs.addTab("Uyarılar", alertsPanel);
 
         panel.add(patientDetailTabs, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    // Diyet ve egzersiz takip paneli - Hastaların diyet ve egzersiz geçmişi
+    private JPanel createDietExerciseTrackingPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Üst kısım - Genel uyum oranları
+        JPanel summaryPanel = new JPanel(new GridLayout(3, 1, 5, 15));
+        summaryPanel.setBorder(BorderFactory.createTitledBorder("Uyum Oranları"));
+
+        // Tarih aralığı seçimi
+        JPanel dateRangePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        dateRangePanel.add(new JLabel("Tarih Aralığı: "));
+        JComboBox<String> dateRangeCombo = new JComboBox<>(new String[] {
+                "Son 7 Gün", "Son 30 Gün", "Son 3 Ay", "Tüm Zamanlar"
+        });
+        dateRangePanel.add(dateRangeCombo);
+
+        JButton updateButton = new JButton("Güncelle");
+        updateButton.addActionListener(e -> {
+            JOptionPane.showMessageDialog(panel,
+                    "Bu özellik henüz uygulanmamıştır. İleriki sürümlerde eklenecektir.",
+                    "Bilgi",
+                    JOptionPane.INFORMATION_MESSAGE);
+        });
+        dateRangePanel.add(updateButton);
+
+        summaryPanel.add(dateRangePanel);
+
+        // Diyet Uyum Oranı - Progress Bar
+        JPanel dietPanel = new JPanel(new BorderLayout(5, 5));
+        dietPanel.add(new JLabel("Diyet Uyum Oranı:"), BorderLayout.WEST);
+
+        JProgressBar dietProgressBar = new JProgressBar(0, 100);
+        dietProgressBar.setValue(0); // Şimdilik 0
+        dietProgressBar.setStringPainted(true);
+        dietProgressBar.setString("Veri yok");
+        dietPanel.add(dietProgressBar, BorderLayout.CENTER);
+
+        summaryPanel.add(dietPanel);
+
+        // Egzersiz Uyum Oranı - Progress Bar
+        JPanel exercisePanel = new JPanel(new BorderLayout(5, 5));
+        exercisePanel.add(new JLabel("Egzersiz Uyum Oranı:"), BorderLayout.WEST);
+
+        JProgressBar exerciseProgressBar = new JProgressBar(0, 100);
+        exerciseProgressBar.setValue(0); // Şimdilik 0
+        exerciseProgressBar.setStringPainted(true);
+        exerciseProgressBar.setString("Veri yok");
+        exercisePanel.add(exerciseProgressBar, BorderLayout.CENTER);
+
+        summaryPanel.add(exercisePanel);
+
+        panel.add(summaryPanel, BorderLayout.NORTH);
+
+        // Orta kısım - Diyet geçmişi tablo
+        JPanel dietHistoryPanel = new JPanel(new BorderLayout());
+        dietHistoryPanel.setBorder(BorderFactory.createTitledBorder("Diyet Geçmişi"));
+
+        String[] dietColumns = {"Tarih", "Diyet Planı", "Açıklama", "Uyum Oranı", "Doktor Notu"};
+        DefaultTableModel dietModel = new DefaultTableModel(dietColumns, 0);
+        JTable dietTable = new JTable(dietModel);
+        JScrollPane dietScroll = new JScrollPane(dietTable);
+        dietHistoryPanel.add(dietScroll, BorderLayout.CENTER);
+
+        // Örnek veri satırı (normalde veritabanından gelecek)
+        dietModel.addRow(new Object[] {
+                "Veri yok", "Veri yok", "Veri yok", "Veri yok", "Veri yok"
+        });
+
+        JLabel dietPlaceholderLabel = new JLabel("<html><center>Bu alanda hastanın diyet geçmişi gösterilecektir.<br>" +
+                "Şu an için örnek veriler gösterilmektedir.</center></html>", JLabel.CENTER);
+        dietPlaceholderLabel.setForeground(Color.GRAY);
+        dietHistoryPanel.add(dietPlaceholderLabel, BorderLayout.NORTH);
+
+        // Alt kısım - Egzersiz geçmişi tablo
+        JPanel exerciseHistoryPanel = new JPanel(new BorderLayout());
+        exerciseHistoryPanel.setBorder(BorderFactory.createTitledBorder("Egzersiz Geçmişi"));
+
+        String[] exerciseColumns = {"Tarih", "Egzersiz Planı", "Açıklama", "Uyum Oranı", "Doktor Notu"};
+        DefaultTableModel exerciseModel = new DefaultTableModel(exerciseColumns, 0);
+        JTable exerciseTable = new JTable(exerciseModel);
+        JScrollPane exerciseScroll = new JScrollPane(exerciseTable);
+        exerciseHistoryPanel.add(exerciseScroll, BorderLayout.CENTER);
+
+        // Örnek veri satırı (normalde veritabanından gelecek)
+        exerciseModel.addRow(new Object[] {
+                "Veri yok", "Veri yok", "Veri yok", "Veri yok", "Veri yok"
+        });
+
+        JLabel exercisePlaceholderLabel = new JLabel("<html><center>Bu alanda hastanın egzersiz geçmişi gösterilecektir.<br>" +
+                "Şu an için örnek veriler gösterilmektedir.</center></html>", JLabel.CENTER);
+        exercisePlaceholderLabel.setForeground(Color.GRAY);
+        exerciseHistoryPanel.add(exercisePlaceholderLabel, BorderLayout.NORTH);
+
+        // Diyet ve egzersiz tablolarını tek bir container'a ekle
+        JPanel tablesPanel = new JPanel(new GridLayout(2, 1, 0, 10));
+        tablesPanel.add(dietHistoryPanel);
+        tablesPanel.add(exerciseHistoryPanel);
+        panel.add(tablesPanel, BorderLayout.CENTER);
 
         return panel;
     }
@@ -1689,8 +1742,37 @@ public class DoctorDashboard extends JPanel {
             row[2] = patient.getSoyad();
             row[3] = patient.getEmail();
             row[4] = patient.getCinsiyet() == 'E' ? "Erkek" : "Kadın";
-            row[5] = "Veri yok"; // Son ölçüm
-            row[6] = "Veri yok"; // Son belirti
+
+            // Son ölçüm bilgisini getir
+            String lastMeasurementText = "Veri yok";
+            if (patient.getPatient_id() != null) {
+                try {
+                    // Yeni yöntem: MeasurementDao kullanarak doğrudan son ölçüm değerini al
+                    MeasurementDao measurementDao = new MeasurementDao();
+                    Integer lastValue = measurementDao.getLastMeasurementValue(patient.getPatient_id());
+                    if (lastValue != null) {
+                        lastMeasurementText = lastValue + " mg/dL";
+                    }
+                } catch (SQLException e) {
+                    System.err.println("Hasta için son ölçüm bilgisi alınamadı: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+            row[5] = lastMeasurementText;
+
+            // Belirti sayısını getir
+            String symptomCountText = "Veri yok";
+            if (patient.getPatient_id() != null) {
+                try {
+                    List<PatientSymptom> symptoms = symptomService.getPatientSymptoms(patient.getPatient_id());
+                    if (symptoms != null && !symptoms.isEmpty()) {
+                        symptomCountText = symptoms.size() + " belirti";
+                    }
+                } catch (Exception e) {
+                    System.err.println("Hasta için belirti sayısı alınamadı: " + e.getMessage());
+                }
+            }
+            row[6] = symptomCountText;
 
             patientTableModel.addRow(row);
         }
@@ -1703,18 +1785,72 @@ public class DoctorDashboard extends JPanel {
         String bloodLevelFilter = (String) bloodLevelFilterCombo.getSelectedItem();
         String symptomFilter = (String) symptomFilterCombo.getSelectedItem();
 
-        // Filtreleme başlıyor mesajı
-        JOptionPane.showMessageDialog(this,
-                "Kan şekeri seviyesi: " + bloodLevelFilter + "\n" +
-                        "Belirti türü: " + symptomFilter + "\n\n" +
-                        "Filtreleme işlevi henüz tam olarak uygulanmamıştır. " +
-                        "Bu özellik, hastaları kan şekeri değerleri ve belirtilerine göre filtreleme yapacaktır.",
-                "Filtreleme İşlevi",
-                JOptionPane.INFORMATION_MESSAGE);
+        System.out.println("Seçilen filtreler: Kan Şekeri = " + bloodLevelFilter + ", Belirti = " + symptomFilter);
 
-        // Bu noktada, gerçek bir uygulamada filtreleme kodu çalışacaktır
-        // Örneğin: filteredPatients = patientService.filterPatientsByBloodSugarAndSymptoms(doctorId, bloodLevelFilter, symptomFilter);
-        // updatePatientTable(filteredPatients);
+        // Önce filtrelenecek hasta listesini tüm hastalardan başlat
+        filteredPatients = new ArrayList<>(allPatients);
+        List<Patient> tempFilteredList = new ArrayList<>();
+
+        // Kan şekeri seviyesine göre filtreleme
+        if (!"Tümü".equals(bloodLevelFilter)) {
+            for (Patient patient : filteredPatients) {
+                try {
+                    // MeasurementDao kullanarak en son kan şekeri ölçümünü al
+                    MeasurementDao measurementDao = new MeasurementDao();
+                    Integer lastValue = measurementDao.getLastMeasurementValue(patient.getPatient_id());
+
+                    if (lastValue != null) {
+                        boolean matchesFilter = false;
+
+                        if ("Düşük-Hipoglisemi (70 mg/dL altı)".equals(bloodLevelFilter) && lastValue < 70) {
+                            matchesFilter = true;
+                        } else if ("Normal (70-99 mg/dL)".equals(bloodLevelFilter) && lastValue >= 70 && lastValue <= 99) {
+                            matchesFilter = true;
+                        } else if ("Orta-Prediyabet (100-125 mg/dL)".equals(bloodLevelFilter) && lastValue >= 100 && lastValue <= 125) {
+                            matchesFilter = true;
+                        } else if ("Yüksek-Diyabet (126 mg/dL üstü)".equals(bloodLevelFilter) && lastValue > 125) {
+                            matchesFilter = true;
+                        }
+
+                        if (matchesFilter) {
+                            tempFilteredList.add(patient);
+                        }
+                    }
+                } catch (SQLException e) {
+                    System.err.println("Hasta için kan şekeri değeri alınamadı: " + e.getMessage());
+                }
+            }
+
+            filteredPatients = new ArrayList<>(tempFilteredList);
+            tempFilteredList.clear();
+        }
+
+        // Semptoma göre filtreleme - Service sınıfı kullanarak - Optimize edilmiş
+        if (!"Tümü".equals(symptomFilter)) {
+            System.out.println("Belirti filtreleme başlıyor: " + symptomFilter);
+
+            // Direkt olarak belirti adına göre hasta ID'lerini al
+            List<Integer> matchingPatientIds = symptomService.findPatientIdsBySymptomName(symptomFilter);
+            System.out.println("Belirtiye sahip hasta ID sayısı: " + matchingPatientIds.size());
+
+            // Mevcut filtrelenmiş listeden eşleşen ID'leri koru
+            for (Patient patient : filteredPatients) {
+                if (patient.getPatient_id() != null && matchingPatientIds.contains(patient.getPatient_id())) {
+                    tempFilteredList.add(patient);
+                }
+            }
+
+            filteredPatients = new ArrayList<>(tempFilteredList);
+            System.out.println("Belirti filtreleme sonucu hasta sayısı: " + filteredPatients.size());
+        }
+
+        // Tabloyu güncelle
+        updatePatientTable(filteredPatients);
+
+        JOptionPane.showMessageDialog(this,
+                "Filtreleme işlemi tamamlandı. Toplam " + filteredPatients.size() + " hasta bulundu.",
+                "Filtreleme Sonucu",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
@@ -1761,36 +1897,6 @@ public class DoctorDashboard extends JPanel {
 
         refreshPatientList();
         loadPatientData(); // Hasta verilerini yenile
-    }
-
-    // Sınıf seviyesi değişkenler
-    private List<TempMeasurement> tempBloodSugarMeasurements = new ArrayList<>();
-    private DefaultTableModel bloodSugarTableModel;
-
-    private class TempMeasurement {
-        private int value;
-        private String period;
-
-        public TempMeasurement(int value, String period) {
-            this.value = value;
-            this.period = period;
-        }
-
-        public int getValue() { return value; }
-        public String getPeriod() { return period; }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
-            TempMeasurement other = (TempMeasurement) obj;
-            return period != null && period.equals(other.period);
-        }
-
-        @Override
-        public int hashCode() {
-            return period != null ? period.hashCode() : 0;
-        }
     }
 }
 

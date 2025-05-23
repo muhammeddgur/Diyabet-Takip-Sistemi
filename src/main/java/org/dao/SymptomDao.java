@@ -386,4 +386,32 @@ public class SymptomDao {
             return affectedRows > 0;
         }
     }
+
+    /**
+     * Belirli bir belirtiye sahip tüm hastaların ID'lerini getirir
+     * @param symptomName Belirti adı
+     * @return Hasta ID'leri listesi
+     * @throws SQLException Veritabanı hatası durumunda
+     */
+    public List<Integer> findPatientIdsBySymptomName(String symptomName) throws SQLException {
+        String sql = "SELECT DISTINCT ps.patient_id FROM patient_symptoms ps " +
+                "JOIN symptoms s ON ps.symptom_id = s.symptom_id " +
+                "WHERE s.symptom_adi = ?";
+
+        List<Integer> patientIds = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, symptomName);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    patientIds.add(rs.getInt("patient_id"));
+                }
+            }
+        }
+
+        return patientIds;
+    }
 }
