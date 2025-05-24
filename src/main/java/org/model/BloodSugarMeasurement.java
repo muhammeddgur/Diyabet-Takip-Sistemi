@@ -67,16 +67,16 @@ public class BloodSugarMeasurement {
 
     public void setOlcum_zamani(String olcum_zamani) {
         String timekey = "";
-        // Olçum zamanının geçerli olduğundan emin olalım
-        if(olcum_zamani.contains("Sabah"))
+        // Olçum zamanının geçerli olduğundan emin olalım - hem büyük hem küçük harf versiyonları
+        if(olcum_zamani.contains("Sabah") || olcum_zamani.contains("sabah"))
             timekey = "sabah";
-        else if(olcum_zamani.contains("Öğle"))
+        else if(olcum_zamani.contains("Öğle") || olcum_zamani.contains("öğle") || olcum_zamani.contains("Ogle") || olcum_zamani.contains("ogle"))
             timekey = "ogle";
-        else if(olcum_zamani.contains("İkindi"))
+        else if(olcum_zamani.contains("İkindi") || olcum_zamani.contains("ikindi"))
             timekey = "ikindi";
-        else if(olcum_zamani.contains("Akşam"))
+        else if(olcum_zamani.contains("Akşam") || olcum_zamani.contains("akşam") || olcum_zamani.contains("Aksam") || olcum_zamani.contains("aksam"))
             timekey = "aksam";
-        else if(olcum_zamani.contains("Gece"))
+        else if(olcum_zamani.contains("Gece") || olcum_zamani.contains("gece"))
             timekey = "gece";
         else
             throw new IllegalArgumentException("Geçersiz ölçüm zamanı. Geçerli değerler: sabah, ogle, ikindi, aksam, gece");
