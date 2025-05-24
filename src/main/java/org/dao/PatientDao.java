@@ -207,6 +207,9 @@ public class PatientDao implements IPatientDao {
         Patient patient = new Patient(user);
         patient.setPatient_id(patientId);
 
+        // Profil resmi user tablosundan geldiği için otomatik olarak
+        // Patient(User) constructor'ı ile kopyalanmış olmalı
+
         // Doktor bilgisini ekle
         Doctor doctor = doctorDao.findById(doctorId);
         if (doctor != null) {

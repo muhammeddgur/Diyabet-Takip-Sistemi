@@ -8,9 +8,13 @@ import org.util.ValidationUtil;
 import org.util.PasswordUtil;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -19,6 +23,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import javax.imageio.ImageIO;
 
 /**
  * Doktor kontrol paneli
@@ -41,6 +48,9 @@ public class DoctorDashboard extends JPanel {
     private String bloodSugarPeriod = ""; // Zaman dilimi (sabah, öğle, vb.)
     private boolean hasBloodSugarMeasurement = false; // Ölçüm girildi mi?
     private JLabel currentMeasurementLabel; // Mevcut kan şekeri ölçüm bilgisi
+    // Sınıf seviyesinde yeni değişkenler ekleyin
+    private JLabel patientProfileImageLabel;
+    private byte[] patientProfileImageBytes; // Seçilen hasta profil resmi
 
 
     // Kart layout ve panel referansları
@@ -146,17 +156,36 @@ public class DoctorDashboard extends JPanel {
     private void initComponents() {
         // Üst panel - her zaman sabit kalacak
         JPanel topPanel = new JPanel(new BorderLayout());
+
+        // Sol taraf - Profil resmi ve hoşgeldin mesajı
+        JPanel profilePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+
+        // updateProfileImage metodunu kullanarak profil resmi oluştur
+        JLabel profileImageLabel = updateProfileImage();
+        // Resmin çevresine biraz boşluk ekleyerek daha iyi hizalama
+        profileImageLabel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Color.GRAY),
+                BorderFactory.createEmptyBorder(2, 2, 2, 2)
+        ));
+
+        profilePanel.add(profileImageLabel);
+
+        // Hoş geldiniz metni
         welcomeLabel = new JLabel("Hoş Geldiniz, Dr. " + currentUser.getAd() + " " + currentUser.getSoyad());
         welcomeLabel.setFont(new Font("Arial", Font.BOLD, 16));
         welcomeLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        topPanel.add(welcomeLabel, BorderLayout.WEST);
+        profilePanel.add(welcomeLabel);
 
+        topPanel.add(profilePanel, BorderLayout.WEST);
+
+        // Sağ taraf - Çıkış butonu
         logoutButton = new JButton("Çıkış Yap");
         logoutButton.addActionListener(e -> parent.showLoginPanel());
         topPanel.add(logoutButton, BorderLayout.EAST);
 
         add(topPanel, BorderLayout.NORTH);
 
+        // Diğer kodlar (değişmeden kalır)...
         // Merkez panel - CardLayout ile panel geçişlerini yönet
         centerPanel = new JPanel();
         cardLayout = new CardLayout();
@@ -189,6 +218,77 @@ public class DoctorDashboard extends JPanel {
 
         // Başlangıçta sekme panelini göster
         cardLayout.show(centerPanel, TABS_PANEL);
+    }
+
+    private JLabel updateProfileImage() {
+        JLabel profileImageLabel = new JLabel();
+        profileImageLabel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        profileImageLabel.setPreferredSize(new Dimension(80, 80)); // 70x70'ten 80x80'e değiştirildi
+
+        if (currentUser != null && currentUser.getProfil_resmi() != null && currentUser.getProfil_resmi().length > 0) {
+            try {
+                // Byte dizisinden resim oluştur
+                ByteArrayInputStream bais = new ByteArrayInputStream(currentUser.getProfil_resmi());
+                BufferedImage img = ImageIO.read(bais);
+
+                // Resim varsa, boyutlandır ve göster
+                if (img != null) {
+                    Image scaledImg = img.getScaledInstance(75, 75, Image.SCALE_SMOOTH); // 65x65'ten 75x75'e değiştirildi
+                    profileImageLabel.setIcon(new ImageIcon(scaledImg));
+
+                    // Resmi ortala
+                    profileImageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+                    profileImageLabel.setVerticalAlignment(SwingConstants.CENTER);
+                } else {
+                    setDefaultProfileImage(profileImageLabel);
+                }
+            } catch (Exception e) {
+                System.err.println("Profil resmi yüklenirken bir hata oluştu: " + e.getMessage());
+                setDefaultProfileImage(profileImageLabel);
+            }
+        } else {
+            setDefaultProfileImage(profileImageLabel);
+        }
+
+        return profileImageLabel;
+    }
+
+    // Varsayılan profil resmi gösterimi için yardımcı metot
+    private void setDefaultProfileImage(JLabel imageLabel) {
+        // Baş harfler için daha büyük avatar oluşturma (hasta paneliyle eşitlemek için)
+        BufferedImage img = new BufferedImage(75, 75, BufferedImage.TYPE_INT_RGB); // 75x75 boyutuna güncellendi
+        Graphics2D g2 = img.createGraphics();
+
+        // Arkaplanı mavi yap
+        g2.setColor(new Color(70, 130, 180)); // Steel blue
+        g2.fillRect(0, 0, 75, 75);
+
+        // Baş harfleri beyaz renkte yaz
+        g2.setColor(Color.WHITE);
+        g2.setFont(new Font("Arial", Font.BOLD, 32)); // Font boyutu artırıldı
+
+        // Kullanıcı adının baş harflerini al
+        String initials = "";
+        if (currentUser.getAd() != null && !currentUser.getAd().isEmpty()) {
+            initials += currentUser.getAd().charAt(0);
+        }
+        if (currentUser.getSoyad() != null && !currentUser.getSoyad().isEmpty()) {
+            initials += currentUser.getSoyad().charAt(0);
+        }
+
+        // Metni ortala
+        FontMetrics metrics = g2.getFontMetrics();
+        int textWidth = metrics.stringWidth(initials);
+        int textHeight = metrics.getHeight();
+        int x = (75 - textWidth) / 2;
+        int y = ((75 - textHeight) / 2) + metrics.getAscent();
+
+        g2.drawString(initials, x, y);
+        g2.dispose();
+
+        // Label'a ekle
+        imageLabel.setIcon(new ImageIcon(img));
+        imageLabel.setText("");
     }
 
 
@@ -271,6 +371,34 @@ public class DoctorDashboard extends JPanel {
         gbc.gridx = 1;
         cinsiyetCombo = new JComboBox<>(new String[] {"Erkek", "Kadın"});
         basicInfoPanel.add(cinsiyetCombo, gbc);
+
+        // Profil Resmi - YENİ EKLENEN KISIM
+        gbc.gridx = 0;
+        gbc.gridy = 7;
+        basicInfoPanel.add(new JLabel("Profil Resmi:"), gbc);
+
+        gbc.gridx = 1;
+        JPanel imagePanel = new JPanel(new BorderLayout(5, 5));
+
+        // Profil resmi önizleme etiketi
+        patientProfileImageLabel = new JLabel();
+        patientProfileImageLabel.setPreferredSize(new Dimension(100, 120));
+        patientProfileImageLabel.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        patientProfileImageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        patientProfileImageLabel.setText("Resim yok");
+
+        // Resim seçme butonu
+        JButton selectImageButton = new JButton("Resim Seç");
+        selectImageButton.addActionListener(e -> selectPatientImage());
+
+        // Panelleri düzenle
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        buttonPanel.add(selectImageButton);
+
+        imagePanel.add(buttonPanel, BorderLayout.NORTH);
+        imagePanel.add(patientProfileImageLabel, BorderLayout.CENTER);
+
+        basicInfoPanel.add(imagePanel, gbc);
 
         mainPanel.add(basicInfoPanel);
 
@@ -588,13 +716,13 @@ public class DoctorDashboard extends JPanel {
         mainPanel.add(plansPanel);
 
         // 6. BÖLÜM: KAYDET BUTONU
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JPanel saveButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         JButton saveButton = new JButton("Hastayı Tüm Bilgilerle Kaydet");
         saveButton.setFont(new Font("Arial", Font.BOLD, 14));
         saveButton.addActionListener(e -> savePatientWithAllInfo());
-        buttonPanel.add(saveButton);
+        saveButtonPanel.add(saveButton);
 
-        mainPanel.add(buttonPanel);
+        mainPanel.add(saveButtonPanel);
 
         // Scrollable Panel
         JScrollPane scrollPane = new JScrollPane(mainPanel);
@@ -606,39 +734,72 @@ public class DoctorDashboard extends JPanel {
         return containerPanel;
     }
 
-    /**
-     * Geçici olarak kan şekeri ölçümü değerini kaydeder
-     */
-    private void addMeasurement() {
-        // Form kontrolü
-        String valueStr = measurementValueField.getText().trim();
-        if (valueStr.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Lütfen ölçüm değerini girin!",
-                    "Form Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
+    // Hasta için resim seçme metodu
+    private void selectPatientImage() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Hasta Profil Resmi Seç");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Resim Dosyaları", "jpg", "jpeg", "png"));
 
-        try {
-            int value = Integer.parseInt(valueStr);
-            if (value <= 0 || value >= 1000) {
-                throw new NumberFormatException();
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                File selectedFile = fileChooser.getSelectedFile();
+                System.out.println("Seçilen hasta profil resmi: " + selectedFile.getAbsolutePath());
+
+                // Resmin boyutunu kontrol et (maksimum 2MB)
+                if (selectedFile.length() > 2 * 1024 * 1024) {
+                    JOptionPane.showMessageDialog(this,
+                            "Resim dosyası çok büyük (maksimum 2MB).",
+                            "Dosya Boyutu Hatası",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                // Resmi oku
+                BufferedImage originalImage = ImageIO.read(selectedFile);
+                if (originalImage == null) {
+                    JOptionPane.showMessageDialog(this,
+                            "Seçilen dosya geçerli bir resim değil.",
+                            "Resim Okuma Hatası",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                // Resmi yeniden boyutlandırma (en boy oranını koru)
+                int targetWidth = 200;
+                int targetHeight = 200;
+
+                // Resmi daha küçük boyuta getir
+                BufferedImage resizedImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+                Graphics2D g = resizedImage.createGraphics();
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
+                g.dispose();
+
+                // Önizleme için resmi göster (daha küçük boyutta)
+                int previewWidth = 90;
+                int previewHeight = 90;
+                Image scaledImg = resizedImage.getScaledInstance(previewWidth, previewHeight, Image.SCALE_SMOOTH);
+                patientProfileImageLabel.setIcon(new ImageIcon(scaledImg));
+                patientProfileImageLabel.setText(null);
+
+                // Resmi byte dizisine dönüştür
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(resizedImage, "png", baos);
+                patientProfileImageBytes = baos.toByteArray();
+                System.out.println("Hasta profil resmi byte dizisine dönüştürüldü: " + patientProfileImageBytes.length + " bytes");
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this,
+                        "Resim yüklenirken bir hata oluştu: " + e.getMessage(),
+                        "Resim Yükleme Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+                e.printStackTrace();
+
+                // Hata durumunda resmi temizle
+                patientProfileImageBytes = null;
+                patientProfileImageLabel.setIcon(null);
+                patientProfileImageLabel.setText("Resim yok");
             }
-
-            JOptionPane.showMessageDialog(this,
-                    "Ölçüm değeri geçici olarak kaydedildi.\nHasta kaydı tamamlandığında veritabanına eklenecektir.",
-                    "İşlem Başarılı",
-                    JOptionPane.INFORMATION_MESSAGE);
-
-            // Form alanını temizleme
-            measurementValueField.setText("");
-
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Ölçüm değeri 1-999 arasında bir sayı olmalıdır!",
-                    "Doğrulama Hatası",
-                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -766,6 +927,9 @@ public class DoctorDashboard extends JPanel {
         patient.setAd(adField.getText().trim());
         patient.setSoyad(soyadField.getText().trim());
         patient.setEmail(emailField.getText().trim());
+
+        // Profil resmi ekle - YENİ EKLENEN KISIM
+        patient.setProfil_resmi(patientProfileImageBytes);
 
         // Doğum tarihi
         Date spinnerDate = (Date) dogumTarihiSpinner.getValue();
@@ -953,9 +1117,9 @@ public class DoctorDashboard extends JPanel {
 
         // Şifre kontrolü
         String password = new String(passwordField.getPassword());
-        if (password.isEmpty()) {
+        if (password.isEmpty() || !ValidationUtil.validatePassword(password)) {
             JOptionPane.showMessageDialog(this,
-                    "Şifre alanı boş bırakılamaz.",
+                    "Şifre en az 8 karakter uzunluğunda olmalı ve büyük harf, küçük harf, rakam ve özel karakter içermelidir.",
                     "Doğrulama Hatası",
                     JOptionPane.ERROR_MESSAGE);
             return false;
@@ -982,6 +1146,13 @@ public class DoctorDashboard extends JPanel {
 
         // Belirtiler
         addPatientSymptomsModel.setRowCount(0);
+
+        // Profil resmi temizleme - YENİ EKLENEN KISIM
+        patientProfileImageBytes = null;
+        if (patientProfileImageLabel != null) {
+            patientProfileImageLabel.setIcon(null);
+            patientProfileImageLabel.setText("Resim yok");
+        }
 
         // Kan şekeri ölçümünü sıfırla
         bloodSugarValue = 0;
@@ -1017,122 +1188,6 @@ public class DoctorDashboard extends JPanel {
     private void clearAddPatientFields() {
         clearAllFields();
     }
-
-    private void addPatient() {
-        // Form alanlarını al
-        String tcKimlik = tcKimlikField.getText();
-        String ad = adField.getText();
-        String soyad = soyadField.getText();
-        String email = emailField.getText();
-        String password = new String(passwordField.getPassword());
-        String cinsiyet = cinsiyetCombo.getSelectedItem().toString().substring(0, 1); // E veya K
-
-        // Doğum tarihini al (JSpinner'dan Date olarak alınır, LocalDate'e çevrilir)
-        Date spinnerDate = (Date) dogumTarihiSpinner.getValue();
-        LocalDate dogumTarihi = spinnerDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-
-        // Validasyon kontrolleri
-        if (tcKimlik.isEmpty() || ad.isEmpty() || soyad.isEmpty() ||
-                email.isEmpty() || password.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Tüm alanlar doldurulmalıdır!",
-                    "Form Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // TC Kimlik No doğrulama
-        if (!ValidationUtil.validateTcKimlik(tcKimlik)) {
-            JOptionPane.showMessageDialog(this,
-                    "Geçersiz TC Kimlik No formatı!",
-                    "Doğrulama Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // Ad ve soyad doğrulama
-        if (!ValidationUtil.validateName(ad) || !ValidationUtil.validateName(soyad)) {
-            JOptionPane.showMessageDialog(this,
-                    "Ad ve soyad sadece harflerden oluşmalıdır!",
-                    "Doğrulama Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // E-posta doğrulama
-        if (!ValidationUtil.validateEmail(email)) {
-            JOptionPane.showMessageDialog(this,
-                    "Geçersiz e-posta formatı!",
-                    "Doğrulama Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // Patient nesnesi oluştur
-        Patient patient = new Patient();
-        patient.setTc_kimlik(tcKimlik);
-        patient.setAd(ad);
-        patient.setSoyad(soyad);
-        patient.setEmail(email);
-        patient.setDogum_tarihi(dogumTarihi);  // Doğum tarihini ekledik
-
-        // Şifreyi hashle
-        try {
-            String hashedPassword = PasswordUtil.hashPassword(password);
-            patient.setPassword(hashedPassword);
-        } catch (NoSuchAlgorithmException ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Şifre hashleme sırasında bir hata oluştu: " + ex.getMessage(),
-                    "Sistem Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        patient.setCinsiyet(cinsiyet.charAt(0));
-        patient.setKullanici_tipi("hasta"); // Hasta kaydı
-
-        // DoctorDao kullanarak mevcut kullanıcının doktor nesnesini bul
-        try {
-            DoctorDao doctorDao = new DoctorDao();
-            Doctor currentDoctor = doctorDao.findByUserId(currentUser.getUser_id());
-
-            if (currentDoctor != null) {
-                patient.setDoctor(currentDoctor);
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "Doktor bilgisi bulunamadı!",
-                        "Sistem Hatası",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Doktor bilgisi alınırken bir hata oluştu: " + e.getMessage(),
-                    "Veritabanı Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // Kayıt işlemini gerçekleştir
-        Patient addedPatient = patientService.addPatient(patient,password);
-
-        if (addedPatient != null) {
-            JOptionPane.showMessageDialog(this,
-                    "Hasta başarıyla eklendi!",
-                    "İşlem Başarılı",
-                    JOptionPane.INFORMATION_MESSAGE);
-            clearAddPatientFields();
-            refreshPatientList();
-            loadPatientData(); // Yeni hasta verilerini yükle
-            tabbedPane.setSelectedIndex(0); // Hasta listesi sekmesine geç
-        } else {
-            JOptionPane.showMessageDialog(this,
-                    "Hasta eklenemedi. Bu TC Kimlik No veya e-posta zaten kullanılıyor olabilir.",
-                    "İşlem Hatası",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
 
     /**
      * Hasta combo box'ını günceller
@@ -1457,17 +1512,41 @@ public class DoctorDashboard extends JPanel {
         JPanel infoPanel = new JPanel(new BorderLayout());
         infoPanel.setBorder(BorderFactory.createTitledBorder("Hasta Bilgileri"));
 
-        JPanel patientInfoPanel = new JPanel(new GridLayout(2, 2, 10, 5));
-        patientInfoPanel.add(new JLabel("Ad Soyad: "));
-        patientInfoPanel.add(new JLabel("TC Kimlik: "));
-        patientInfoPanel.add(new JLabel("Yaş: "));
-        patientInfoPanel.add(new JLabel("E-posta: "));
+        // Sol tarafta profil resmi
+        JPanel profileImagePanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JLabel patientImageLabel = new JLabel();
+        patientImageLabel.setPreferredSize(new Dimension(100, 120));
+        patientImageLabel.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        patientImageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        patientImageLabel.setText("Resim yok");
+        patientImageLabel.setName("patientImageLabel"); // Sonra erişim için isim ver
+        profileImagePanel.add(patientImageLabel);
 
-        infoPanel.add(patientInfoPanel, BorderLayout.CENTER);
+        // Sağ tarafta hasta bilgileri
+        JPanel patientInfoPanel = new JPanel(new GridLayout(4, 2, 10, 5));
+        patientInfoPanel.add(new JLabel("Ad Soyad: "));
+        patientInfoPanel.add(new JLabel(""));
+        patientInfoPanel.add(new JLabel("TC Kimlik: "));
+        patientInfoPanel.add(new JLabel(""));
+        patientInfoPanel.add(new JLabel("Yaş: "));
+        patientInfoPanel.add(new JLabel(""));
+        patientInfoPanel.add(new JLabel("E-posta: "));
+        patientInfoPanel.add(new JLabel(""));
+
+        // Ana panel içine yerleştir
+        JPanel contentPanel = new JPanel(new BorderLayout());
+        contentPanel.add(profileImagePanel, BorderLayout.WEST);
+        contentPanel.add(patientInfoPanel, BorderLayout.CENTER);
+
+        infoPanel.add(contentPanel, BorderLayout.CENTER);
 
         // Geri dönüş butonu
         JButton backButton = new JButton("Listeye Dön");
         backButton.addActionListener(e -> {
+            // Üst paneli tekrar görünür yap
+            Component topComponent = DoctorDashboard.this.getComponent(0);
+            topComponent.setVisible(true);
+
             // Ana sekme paneline dön
             cardLayout.show(centerPanel, TABS_PANEL);
         });
@@ -1673,14 +1752,49 @@ public class DoctorDashboard extends JPanel {
 
             selectedPatient = patient;
 
+            // Üst paneli gizle (doktor profil resmi ve hoş geldiniz yazısı)
+            Component topComponent = getComponent(0); // BorderLayout.NORTH bileşenini al
+            topComponent.setVisible(false); // Panel görünürlüğünü kapat
+
             // Hasta bilgileri panelini güncelle
             JPanel infoPanel = (JPanel) patientDetailPanel.getComponent(0);
-            JPanel patientInfoPanel = (JPanel) infoPanel.getComponent(0);
+            JPanel contentPanel = (JPanel) infoPanel.getComponent(0);
 
-            JLabel nameLabel = (JLabel) patientInfoPanel.getComponent(0);
-            JLabel tcLabel = (JLabel) patientInfoPanel.getComponent(1);
-            JLabel ageLabel = (JLabel) patientInfoPanel.getComponent(2);
-            JLabel emailLabel = (JLabel) patientInfoPanel.getComponent(3);
+            // Profil resmi panel (sol taraf)
+            JPanel profileImagePanel = (JPanel) contentPanel.getComponent(0);
+            JLabel patientImageLabel = (JLabel) profileImagePanel.getComponent(0);
+
+            // Hasta profil resmini göster
+            if (patient.getProfil_resmi() != null && patient.getProfil_resmi().length > 0) {
+                try {
+                    ByteArrayInputStream bis = new ByteArrayInputStream(patient.getProfil_resmi());
+                    BufferedImage originalImage = ImageIO.read(bis);
+
+                    if (originalImage != null) {
+                        // Resmi uygun boyuta ölçeklendir
+                        Image scaledImage = originalImage.getScaledInstance(90, 110, Image.SCALE_SMOOTH);
+                        patientImageLabel.setIcon(new ImageIcon(scaledImage));
+                        patientImageLabel.setText("");
+                    } else {
+                        // Varsayılan resim göster (baş harfler)
+                        createDefaultPatientImage(patientImageLabel, patient);
+                    }
+                } catch (IOException e) {
+                    System.err.println("Hasta profil resmi yüklenemedi: " + e.getMessage());
+                    createDefaultPatientImage(patientImageLabel, patient);
+                }
+            } else {
+                // Profil resmi yok, varsayılan resim göster
+                createDefaultPatientImage(patientImageLabel, patient);
+            }
+
+            // Bilgi paneli (sağ taraf)
+            JPanel patientInfoPanel = (JPanel) contentPanel.getComponent(1);
+
+            JLabel nameLabel = (JLabel) patientInfoPanel.getComponent(1);
+            JLabel tcLabel = (JLabel) patientInfoPanel.getComponent(3);
+            JLabel ageLabel = (JLabel) patientInfoPanel.getComponent(5);
+            JLabel emailLabel = (JLabel) patientInfoPanel.getComponent(7);
 
             // Yaşı hesapla
             int age = 0;
@@ -1688,10 +1802,10 @@ public class DoctorDashboard extends JPanel {
                 age = LocalDate.now().getYear() - patient.getDogum_tarihi().getYear();
             }
 
-            nameLabel.setText("Ad Soyad: " + patient.getAd() + " " + patient.getSoyad());
-            tcLabel.setText("TC Kimlik: " + patient.getTc_kimlik());
-            ageLabel.setText("Yaş: " + age);
-            emailLabel.setText("E-posta: " + patient.getEmail());
+            nameLabel.setText(patient.getAd() + " " + patient.getSoyad());
+            tcLabel.setText(patient.getTc_kimlik());
+            ageLabel.setText(String.valueOf(age));
+            emailLabel.setText(patient.getEmail());
 
             // Detay panelini göster
             cardLayout.show(centerPanel, DETAIL_PANEL);
@@ -1703,6 +1817,44 @@ public class DoctorDashboard extends JPanel {
                     JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
+    }
+
+    // Varsayılan hasta profil resmi oluşturan yardımcı method
+    private void createDefaultPatientImage(JLabel imageLabel, Patient patient) {
+        // Resmi temizle
+        imageLabel.setIcon(null);
+
+        // Kişinin baş harflerinden görsel oluştur
+        BufferedImage img = new BufferedImage(90, 90, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = img.createGraphics();
+
+        // Arkaplan rengi
+        g2.setColor(new Color(70, 130, 180)); // Steel Blue
+        g2.fillRect(0, 0, 90, 90);
+
+        // Baş harfler
+        g2.setFont(new Font("Arial", Font.BOLD, 36));
+        g2.setColor(Color.WHITE);
+
+        String initials = "";
+        if (patient.getAd() != null && !patient.getAd().isEmpty()) {
+            initials += patient.getAd().substring(0, 1);
+        }
+        if (patient.getSoyad() != null && !patient.getSoyad().isEmpty()) {
+            initials += patient.getSoyad().substring(0, 1);
+        }
+
+        // Metni ortala
+        FontMetrics fm = g2.getFontMetrics();
+        int textWidth = fm.stringWidth(initials);
+        int textHeight = fm.getHeight();
+        g2.drawString(initials, (90 - textWidth) / 2, 45 + fm.getAscent() / 2 - textHeight / 4);
+
+        g2.dispose();
+
+        // Label'a ekle
+        imageLabel.setIcon(new ImageIcon(img));
+        imageLabel.setText(null);
     }
 
     /**
@@ -1882,6 +2034,43 @@ public class DoctorDashboard extends JPanel {
     public void refreshData(User user) {
         this.currentUser = user;
         welcomeLabel.setText("Hoş Geldiniz, Dr. " + currentUser.getAd() + " " + currentUser.getSoyad());
+
+        // Profil resmini güncelle
+        try {
+            // Üst paneli bulma
+            Component[] components = this.getComponents();
+            JPanel topPanel = null;
+
+            for (Component component : components) {
+                if (component instanceof JPanel && component.getClass().getName().equals("javax.swing.JPanel")) {
+                    if (((JPanel)component).getLayout() instanceof BorderLayout) {
+                        topPanel = (JPanel)component;
+                        break;
+                    }
+                }
+            }
+
+            if (topPanel != null) {
+                // Profil panelini bul (sol tarafta)
+                Component leftComponent = ((BorderLayout)topPanel.getLayout()).getLayoutComponent(BorderLayout.WEST);
+                if (leftComponent instanceof JPanel) {
+                    JPanel profilePanel = (JPanel)leftComponent;
+
+                    // Profil panelindeki ilk bileşen (profil resmi etiketi) olacak
+                    if (profilePanel.getComponentCount() > 0 && profilePanel.getComponent(0) instanceof JLabel) {
+                        profilePanel.remove(0); // Eski profil resmini kaldır
+                        profilePanel.add(updateProfileImage(), 0); // Yeni profil resmini ekle
+                        profilePanel.revalidate(); // Panel yerleşimini güncelle
+                        profilePanel.repaint(); // Paneli yeniden çiz
+
+                        System.out.println("Profil resmi güncellendi");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Profil resmi güncellenirken hata: " + e.getMessage());
+            e.printStackTrace();
+        }
 
         // Doktor ID'sini yeniden bul
         try {

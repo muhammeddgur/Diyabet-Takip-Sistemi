@@ -4,10 +4,15 @@ import org.model.User;
 import org.service.AuthenticationService;
 import org.util.ValidationUtil;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
@@ -26,6 +31,9 @@ public class RegisterPanel extends JPanel {
     private JSpinner dogumTarihiSpinner;
     private JButton registerButton;
     private JButton backButton;
+    private JButton selectImageButton;
+    private JLabel imagePreviewLabel;
+    private byte[] selectedImageBytes; // Seçilen resmin byte dizisi
     private AuthenticationService authService;
     private MainFrame parent;
 
@@ -131,33 +139,58 @@ public class RegisterPanel extends JPanel {
         confirmPasswordField = new JPasswordField(15);
         add(confirmPasswordField, gbc);
 
-        // Kayıt ol butonu
+// Profil Resmi bölümünü güncelleyin
         gbc.gridx = 0;
         gbc.gridy = 9;
+        add(new JLabel("Profil Resmi:"), gbc);
+
+        gbc.gridx = 1;
+        JPanel imagePanel = new JPanel(new BorderLayout(5, 5));
+
+        // Profil resmi önizleme etiketi - daha kompakt boyutlama
+        imagePreviewLabel = new JLabel();
+        imagePreviewLabel.setPreferredSize(new Dimension(100, 120)); // Boy/en oranını koruyacak şekilde ayarlayın
+        imagePreviewLabel.setBorder(BorderFactory.createEmptyBorder()); // Çerçeveyi kaldırın
+        imagePreviewLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        imagePreviewLabel.setText("Resim yok");
+
+        // Resim seçme butonu
+        selectImageButton = new JButton("Resim Seç");
+        selectImageButton.addActionListener(e -> selectImage());
+
+        // Panelleri düzenle - daha kompakt yerleşim
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        buttonPanel.add(selectImageButton);
+
+        JPanel previewPanel = new JPanel(new BorderLayout());
+        previewPanel.add(imagePreviewLabel, BorderLayout.CENTER);
+        previewPanel.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200), 1)); // Daha açık gri, ince çerçeve
+
+        JPanel combinedPanel = new JPanel(new BorderLayout(5, 5));
+        combinedPanel.add(buttonPanel, BorderLayout.NORTH);
+        combinedPanel.add(previewPanel, BorderLayout.CENTER);
+
+        add(combinedPanel, gbc);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        // Kayıt ol butonu
+        gbc.gridx = 0;
+        gbc.gridy = 10;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.NONE;
         gbc.anchor = GridBagConstraints.CENTER;
         registerButton = new JButton("Kaydı Tamamla");
-        registerButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                register();
-            }
-        });
+        registerButton.addActionListener(e -> register());
         add(registerButton, gbc);
 
         // Geri dön butonu
-        gbc.gridy = 10;
+        gbc.gridy = 11;
         backButton = new JButton("Giriş Ekranına Dön");
-        backButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                parent.showLoginPanel();
-            }
-        });
+        backButton.addActionListener(e -> parent.showLoginPanel());
         add(backButton, gbc);
     }
 
+    // Register metodu güncellendi
     private void register() {
         // Form alanlarını al
         String tcKimlik = tcKimlikField.getText();
@@ -239,9 +272,14 @@ public class RegisterPanel extends JPanel {
         user.setSoyad(soyad);
         user.setEmail(email);
         user.setPassword(password);
-        user.setDogum_tarihi(dogumTarihi);  // Doğum tarihini ekledik
-        user.setCinsiyet(cinsiyet.charAt(0));        // Cinsiyeti ekledik
-        user.setKullanici_tipi("doktor");  // Doktor kaydı
+        user.setDogum_tarihi(dogumTarihi);
+        user.setCinsiyet(cinsiyet.charAt(0));
+        user.setKullanici_tipi("doktor");
+
+        // Profil resmini ayarla
+        if (selectedImageBytes != null) {
+            user.setProfil_resmi(selectedImageBytes);
+        }
 
         // Kayıt işlemini gerçekleştir
         User registeredUser = authService.register(user);
@@ -261,6 +299,103 @@ public class RegisterPanel extends JPanel {
         }
     }
 
+    private void selectImage() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Profil Resmi Seç");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Resim Dosyaları", "jpg", "jpeg", "png"));
+
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                File selectedFile = fileChooser.getSelectedFile();
+
+                // Resmin boyutunu kontrol et (maksimum 2MB)
+                if (selectedFile.length() > 2 * 1024 * 1024) {
+                    JOptionPane.showMessageDialog(this,
+                            "Resim dosyası çok büyük (maksimum 2MB).",
+                            "Dosya Boyutu Hatası",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                // Resmi oku
+                BufferedImage originalImage = ImageIO.read(selectedFile);
+                if (originalImage == null) {
+                    JOptionPane.showMessageDialog(this,
+                            "Seçilen dosya geçerli bir resim değil.",
+                            "Resim Okuma Hatası",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                // Önizleme için resmi yeniden boyutlandır (en boy oranını koru)
+                BufferedImage resizedImage = resizeImageWithAspectRatio(originalImage, 200, 200);
+
+                // Önizleme için resmi daha küçük boyuta getir (en boy oranını koru)
+                int previewWidth = 100;
+                int previewHeight = 100;
+
+                // Görüntü en boy oranını hesapla
+                double aspectRatio = (double) originalImage.getWidth() / originalImage.getHeight();
+                if (aspectRatio > 1) {  // Yatay görüntü
+                    previewHeight = (int) (previewWidth / aspectRatio);
+                } else {  // Dikey görüntü
+                    previewWidth = (int) (previewHeight * aspectRatio);
+                }
+
+                Image scaledImg = resizedImage.getScaledInstance(previewWidth, previewHeight, Image.SCALE_SMOOTH);
+                imagePreviewLabel.setIcon(new ImageIcon(scaledImg));
+                imagePreviewLabel.setText(null); // Metin yerine resmi göster
+
+                // Resmi byte dizisine dönüştür
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(resizedImage, "png", baos);
+                selectedImageBytes = baos.toByteArray();
+                System.out.println("Resim byte dizisine dönüştürüldü: " + selectedImageBytes.length + " bytes");
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this,
+                        "Resim yüklenirken bir hata oluştu: " + e.getMessage(),
+                        "Resim Yükleme Hatası",
+                        JOptionPane.ERROR_MESSAGE);
+                e.printStackTrace();
+
+                // Hata durumunda resmi temizle
+                selectedImageBytes = null;
+                imagePreviewLabel.setIcon(null);
+                imagePreviewLabel.setText("Resim yok");
+            }
+        }
+    }
+
+    // En-boy oranını koruyan yeni boyutlandırma metodu
+    private BufferedImage resizeImageWithAspectRatio(BufferedImage originalImage, int targetWidth, int targetHeight) {
+        // Görüntü boyutlarını ve en boy oranını hesapla
+        int originalWidth = originalImage.getWidth();
+        int originalHeight = originalImage.getHeight();
+        float ratio = (float) originalWidth / originalHeight;
+
+        int width = targetWidth;
+        int height = targetHeight;
+
+        // En-boy oranını koru
+        if (width / height > ratio) {
+            width = (int) (height * ratio);
+        } else {
+            height = (int) (width / ratio);
+        }
+
+        // Yeni boyutta resmi oluştur
+        BufferedImage resizedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = resizedImage.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.drawImage(originalImage, 0, 0, width, height, null);
+        g.dispose();
+
+        return resizedImage;
+    }
+
     public void clearFields() {
         tcKimlikField.setText("");
         adField.setText("");
@@ -274,5 +409,10 @@ public class RegisterPanel extends JPanel {
         defaultDate.setYear(defaultDate.getYear() - 30);
         dogumTarihiSpinner.setValue(defaultDate);
         cinsiyetCombo.setSelectedIndex(0);
+
+        // Profil resmi bilgilerini temizle
+        selectedImageBytes = null;
+        imagePreviewLabel.setIcon(null);
+        imagePreviewLabel.setText("Resim yok");
     }
 }

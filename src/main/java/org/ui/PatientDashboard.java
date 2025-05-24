@@ -6,10 +6,15 @@ import org.model.*;
 import org.service.*;
 import org.util.DateTimeUtil;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.sql.SQLException;
+import java.time.LocalDate;
 
 /**
  * Hasta kontrol paneli
@@ -48,11 +53,23 @@ public class PatientDashboard extends JPanel {
     private void initComponents() {
         // Üst panel
         JPanel topPanel = new JPanel(new BorderLayout());
+
+        // Sol taraf - Profil resmi ve hoş geldiniz mesajı
+        JPanel profilePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+
+        // Profil resmi etiketi
+        JLabel profileImageLabel = createProfileImageLabel();
+        profilePanel.add(profileImageLabel);
+
+        // Hoş geldiniz metni
         welcomeLabel = new JLabel("Hoş Geldiniz, " + currentUser.getAd() + " " + currentUser.getSoyad());
         welcomeLabel.setFont(new Font("Arial", Font.BOLD, 16));
         welcomeLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        topPanel.add(welcomeLabel, BorderLayout.WEST);
+        profilePanel.add(welcomeLabel);
 
+        topPanel.add(profilePanel, BorderLayout.WEST);
+
+        // Sağ taraf - Çıkış butonu
         logoutButton = new JButton("Çıkış Yap");
         logoutButton.addActionListener(e -> parent.showLoginPanel());
         topPanel.add(logoutButton, BorderLayout.EAST);
@@ -78,11 +95,83 @@ public class PatientDashboard extends JPanel {
         JPanel exercisePanel = createExercisePanel();
         tabbedPane.addTab("Egzersiz Takibi", exercisePanel);
 
-        // Belirti Sekmesi
-        JPanel symptomsPanel = createSymptomsPanel();
-        tabbedPane.addTab("Belirtiler", symptomsPanel);
-
         add(tabbedPane, BorderLayout.CENTER);
+    }
+
+    /**
+     * Profil resmi etiketini oluşturur ve içeriğini yükler
+     */
+    private JLabel createProfileImageLabel() {
+        JLabel profileImageLabel = new JLabel();
+        profileImageLabel.setPreferredSize(new Dimension(80, 80));
+        profileImageLabel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        profileImageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // Profil resminin kontrolü
+        if (patient != null && patient.getProfil_resmi() != null && patient.getProfil_resmi().length > 0) {
+            try {
+                // Profil resmini byte dizisinden yükle
+                ByteArrayInputStream bis = new ByteArrayInputStream(patient.getProfil_resmi());
+                BufferedImage originalImage = ImageIO.read(bis);
+
+                if (originalImage != null) {
+                    // Resmi boyutlandır - daha büyük boyut
+                    Image scaledImage = originalImage.getScaledInstance(75, 75, Image.SCALE_SMOOTH);
+                    profileImageLabel.setIcon(new ImageIcon(scaledImage));
+                } else {
+                    // Yüklenemezse default görsel oluştur
+                    createDefaultProfileImage(profileImageLabel);
+                }
+            } catch (IOException e) {
+                System.err.println("Profil resmi yüklenemedi: " + e.getMessage());
+                // Hata durumunda default görsel oluştur
+                createDefaultProfileImage(profileImageLabel);
+            }
+        } else {
+            // Profil resmi yoksa default görsel oluştur
+            createDefaultProfileImage(profileImageLabel);
+        }
+
+        return profileImageLabel;
+    }
+
+    /**
+     * Varsayılan profil resmi oluşturur (kullanıcının baş harflerinden)
+     */
+    private void createDefaultProfileImage(JLabel imageLabel) {
+        // Varsayılan profil resmi oluştur (baş harflerden) - daha büyük boyut
+        BufferedImage img = new BufferedImage(75, 75, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = img.createGraphics();
+
+        // Arkaplanı mavi yap
+        g2.setColor(new Color(70, 130, 180)); // Steel blue
+        g2.fillRect(0, 0, 75, 75); // Boyut güncellendi
+
+        // Baş harfleri beyaz renkte yaz - daha büyük font
+        g2.setColor(Color.WHITE);
+        g2.setFont(new Font("Arial", Font.BOLD, 32)); // Font boyutu 20'den 32'ye büyütüldü
+
+        // Kullanıcı adının baş harflerini al
+        String initials = "";
+        if (currentUser.getAd() != null && !currentUser.getAd().isEmpty()) {
+            initials += currentUser.getAd().charAt(0);
+        }
+        if (currentUser.getSoyad() != null && !currentUser.getSoyad().isEmpty()) {
+            initials += currentUser.getSoyad().charAt(0);
+        }
+
+        // Metni ortala
+        FontMetrics metrics = g2.getFontMetrics();
+        int textWidth = metrics.stringWidth(initials);
+        int textHeight = metrics.getHeight();
+        int x = (75 - textWidth) / 2;
+        int y = ((75 - textHeight) / 2) + metrics.getAscent();
+
+        g2.drawString(initials, x, y);
+        g2.dispose();
+
+        // Label'a ekle
+        imageLabel.setIcon(new ImageIcon(img));
     }
 
     /**
@@ -114,13 +203,24 @@ public class PatientDashboard extends JPanel {
         dietPanel.add(dietProgress, BorderLayout.CENTER);
         infoPanel.add(dietPanel);
 
-        // Son ölçüm
-        JPanel lastMeasurementPanel = new JPanel(new BorderLayout());
-        lastMeasurementPanel.add(new JLabel("Son Ölçüm:"), BorderLayout.NORTH);
-        JLabel lastMeasurementLabel = new JLabel("Veri yok");
-        lastMeasurementLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        lastMeasurementPanel.add(lastMeasurementLabel, BorderLayout.CENTER);
-        infoPanel.add(lastMeasurementPanel);
+        // Günlük kan şekeri değerleri
+        JPanel dailyMeasurementsPanel = new JPanel(new BorderLayout());
+        dailyMeasurementsPanel.add(new JLabel("Günlük Kan Şekeri Değerleri:"), BorderLayout.NORTH);
+
+        // Günlük değerleri gösteren mini tablo
+        DefaultTableModel miniTableModel = new DefaultTableModel(
+                new Object[][]{{"Sabah", "Öğle", "İkindi", "Akşam", "Gece"},
+                        {"Veri yok", "Veri yok", "Veri yok", "Veri yok", "Veri yok"}},
+                new String[]{"", "", "", "", ""}
+        );
+        JTable miniTable = new JTable(miniTableModel);
+        miniTable.setEnabled(false);
+        miniTable.setRowHeight(25);
+        JScrollPane miniScrollPane = new JScrollPane(miniTable);
+        miniScrollPane.setPreferredSize(new Dimension(200, 60));
+
+        dailyMeasurementsPanel.add(miniScrollPane, BorderLayout.CENTER);
+        infoPanel.add(dailyMeasurementsPanel);
 
         // Egzersiz uyum oranı
         JPanel exercisePanel = new JPanel(new BorderLayout());
@@ -147,28 +247,7 @@ public class PatientDashboard extends JPanel {
 
         panel.add(chartPanel, BorderLayout.CENTER);
 
-        // Alt kısım - İşlem butonları
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
-
-        JButton addMeasurementButton = new JButton("Yeni Ölçüm Ekle");
-        addMeasurementButton.addActionListener(e -> {
-            tabbedPane.setSelectedIndex(1); // Kan Şekeri Ölçümleri sekmesine git
-        });
-        buttonPanel.add(addMeasurementButton);
-
-        JButton updateDietButton = new JButton("Diyet Durumu Güncelle");
-        updateDietButton.addActionListener(e -> {
-            tabbedPane.setSelectedIndex(2); // Diyet Takibi sekmesine git
-        });
-        buttonPanel.add(updateDietButton);
-
-        JButton updateExerciseButton = new JButton("Egzersiz Durumu Güncelle");
-        updateExerciseButton.addActionListener(e -> {
-            tabbedPane.setSelectedIndex(3); // Egzersiz Takibi sekmesine git
-        });
-        buttonPanel.add(updateExerciseButton);
-
-        panel.add(buttonPanel, BorderLayout.SOUTH);
+        // TODO: Grafiği gerçek verilerle güncelleyen kod burada olacak
 
         return panel;
     }
@@ -224,16 +303,44 @@ public class PatientDashboard extends JPanel {
 
         panel.add(formPanel, BorderLayout.NORTH);
 
+        // Filtreleme ve tablo paneli
+        JPanel centerPanel = new JPanel(new BorderLayout(5, 5));
+
+        // Filtreleme paneli
+        JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        filterPanel.setBorder(BorderFactory.createTitledBorder("İnsülin Değerlerini Filtrele"));
+
+        filterPanel.add(new JLabel("Başlangıç Tarihi:"));
+        JTextField startDateField = new JTextField(10);
+        startDateField.setText(LocalDate.now().minusWeeks(1).toString()); // Son 1 hafta
+        filterPanel.add(startDateField);
+
+        filterPanel.add(new JLabel("Bitiş Tarihi:"));
+        JTextField endDateField = new JTextField(10);
+        endDateField.setText(LocalDate.now().toString()); // Bugün
+        filterPanel.add(endDateField);
+
+        JButton filterButton = new JButton("Filtrele");
+        filterButton.addActionListener(e -> {
+            // TODO: Burada tarih aralığına göre filtreleme işlemi yapılacak
+            JOptionPane.showMessageDialog(panel, "Seçilen tarih aralığındaki ölçümler filtrelenecek.",
+                    "Bilgi", JOptionPane.INFORMATION_MESSAGE);
+        });
+        filterPanel.add(filterButton);
+
+        centerPanel.add(filterPanel, BorderLayout.NORTH);
+
         // Ölçüm listesi tablosu
-        String[] columnNames = {"Tarih", "Saat", "Değer (mg/dL)", "Periyot", "Durum"};
+        String[] columnNames = {"Tarih", "Saat", "Değer (mg/dL)", "Periyot", "İnsülin Dozu", "Durum"};
         DefaultTableModel model = new DefaultTableModel(columnNames, 0);
 
-        // Boş tablo
         JTable measurementsTable = new JTable(model);
         JScrollPane scrollPane = new JScrollPane(measurementsTable);
         scrollPane.setBorder(BorderFactory.createTitledBorder("Kan Şekeri Ölçümlerim"));
 
-        panel.add(scrollPane, BorderLayout.CENTER);
+        centerPanel.add(scrollPane, BorderLayout.CENTER);
+
+        panel.add(centerPanel, BorderLayout.CENTER);
 
         return panel;
     }
@@ -241,7 +348,6 @@ public class PatientDashboard extends JPanel {
     /**
      * Ölçüm ekleme işlemini gerçekleştirir
      */
-    //Kan şekeri ölçüm değerleri tabloya burada kaydedilir
     private void addMeasurement() {
         // Form kontrolü
         String valueStr = measurementField.getText().trim();
@@ -265,11 +371,9 @@ public class PatientDashboard extends JPanel {
             measurement.setOlcum_degeri(value);
             measurement.setOlcum_zamani(periodText);
             measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime()); // Şu anki tarih ve saat
-
             measurement.setInsulin_miktari(0.0);
 
-
-            //Service aracılığıyla Dao kullanarak tabloya ekler
+            // Service aracılığıyla Dao kullanarak tabloya ekler
             boolean success = measurementService.addMeasurement(measurement);
 
             MeasurementDao measurementDao = new MeasurementDao();
@@ -304,10 +408,6 @@ public class PatientDashboard extends JPanel {
                         JOptionPane.ERROR_MESSAGE);
             }
 
-            // Form alanlarını temizle
-            measurementField.setText("");
-            periodCombo.setSelectedIndex(0);
-
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this,
                     "Ölçüm değeri 1-999 arasında bir sayı olmalıdır!",
@@ -328,7 +428,7 @@ public class PatientDashboard extends JPanel {
         dietInfoPanel.setBorder(BorderFactory.createTitledBorder("Diyet Planım"));
 
         JTextArea dietDetailsArea = new JTextArea(5, 30);
-        dietDetailsArea.setText("Veri yok");
+        dietDetailsArea.setText("Veri yok"); // TODO: Veritabanından yüklenecek
         dietDetailsArea.setEditable(false);
         dietDetailsArea.setBackground(null);
         JScrollPane dietScrollPane = new JScrollPane(dietDetailsArea);
@@ -349,20 +449,12 @@ public class PatientDashboard extends JPanel {
         reportPanel.add(new JLabel("Bugün diyet planını uyguladın mı?"), gbc);
 
         gbc.gridx = 1;
-        String[] dietStatus = {"Evet, tamamen uyguladım", "Kısmen uyguladım", "Hayır, uygulayamadım"};
+        String[] dietStatus = {"Evet, uyguladım", "Hayır, uygulamadım"};
         JComboBox<String> dietStatusCombo = new JComboBox<>(dietStatus);
         reportPanel.add(dietStatusCombo, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 1;
-        reportPanel.add(new JLabel("Notlar:"), gbc);
-
-        gbc.gridx = 1;
-        JTextField notesField = new JTextField(20);
-        reportPanel.add(notesField, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 2;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
         JButton reportButton = new JButton("Bildir");
@@ -371,8 +463,6 @@ public class PatientDashboard extends JPanel {
                     "Diyet durumu başarıyla bildirildi:\n" + dietStatusCombo.getSelectedItem(),
                     "Başarılı",
                     JOptionPane.INFORMATION_MESSAGE);
-
-            notesField.setText("");
         });
         reportPanel.add(reportButton, gbc);
 
@@ -393,7 +483,7 @@ public class PatientDashboard extends JPanel {
         exerciseInfoPanel.setBorder(BorderFactory.createTitledBorder("Egzersiz Planım"));
 
         JTextArea exerciseDetailsArea = new JTextArea(5, 30);
-        exerciseDetailsArea.setText("Veri yok");
+        exerciseDetailsArea.setText("Veri yok"); // TODO: Veritabanından yüklenecek
         exerciseDetailsArea.setEditable(false);
         exerciseDetailsArea.setBackground(null);
         JScrollPane exerciseScrollPane = new JScrollPane(exerciseDetailsArea);
@@ -420,22 +510,6 @@ public class PatientDashboard extends JPanel {
 
         gbc.gridx = 0;
         gbc.gridy = 1;
-        reportPanel.add(new JLabel("Süre (dakika):"), gbc);
-
-        gbc.gridx = 1;
-        JTextField durationField = new JTextField();
-        reportPanel.add(durationField, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        reportPanel.add(new JLabel("Notlar:"), gbc);
-
-        gbc.gridx = 1;
-        JTextField notesField = new JTextField(20);
-        reportPanel.add(notesField, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 3;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
         JButton reportButton = new JButton("Bildir");
@@ -444,8 +518,6 @@ public class PatientDashboard extends JPanel {
                     "Egzersiz durumu başarıyla bildirildi.",
                     "Başarılı",
                     JOptionPane.INFORMATION_MESSAGE);
-
-            notesField.setText("");
         });
         reportPanel.add(reportButton, gbc);
 
@@ -454,87 +526,41 @@ public class PatientDashboard extends JPanel {
         return panel;
     }
 
-    /**
-     * Belirti Takip Paneli
-     */
-    private JPanel createSymptomsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-
-        // Belirti Ekleme Formu
-        JPanel formPanel = new JPanel(new GridBagLayout());
-        formPanel.setBorder(BorderFactory.createTitledBorder("Yeni Belirti Ekle"));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 5, 5, 5);
-
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        formPanel.add(new JLabel("Belirti:"), gbc);
-
-        gbc.gridx = 1;
-        String[] symptoms = {
-                "Susuzluk/Ağız Kuruluğu",
-                "Sık İdrara Çıkma",
-                "Yorgunluk",
-                "Bulanık Görme",
-                "Baş Dönmesi",
-                "Uyuşma/Karıncalanma"
-        };
-        JComboBox<String> symptomCombo = new JComboBox<>(symptoms);
-        formPanel.add(symptomCombo, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        formPanel.add(new JLabel("Şiddeti:"), gbc);
-
-        gbc.gridx = 1;
-        String[] severities = {"Hafif", "Orta", "Şiddetli"};
-        JComboBox<String> severityCombo = new JComboBox<>(severities);
-        formPanel.add(severityCombo, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        formPanel.add(new JLabel("Açıklama:"), gbc);
-
-        gbc.gridx = 1;
-        JTextField descriptionField = new JTextField(20);
-        formPanel.add(descriptionField, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        gbc.gridwidth = 2;
-        gbc.anchor = GridBagConstraints.CENTER;
-        JButton addButton = new JButton("Ekle");
-        addButton.addActionListener(e -> {
-            JOptionPane.showMessageDialog(panel,
-                    "Belirti başarıyla eklendi.",
-                    "Başarılı",
-                    JOptionPane.INFORMATION_MESSAGE);
-
-            descriptionField.setText("");
-        });
-        formPanel.add(addButton, gbc);
-
-        panel.add(formPanel, BorderLayout.NORTH);
-
-        // Belirti Geçmişi Tablosu
-        String[] columnNames = {"Tarih", "Belirti", "Şiddeti", "Açıklama"};
-        DefaultTableModel model = new DefaultTableModel(columnNames, 0);
-
-        // Boş tablo
-        JTable symptomsTable = new JTable(model);
-        JScrollPane scrollPane = new JScrollPane(symptomsTable);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Belirttiğim Semptomlar"));
-
-        panel.add(scrollPane, BorderLayout.CENTER);
-
-        return panel;
-    }
-
     public void refreshData(User user) {
         this.currentUser = user;
+        this.patient = patientService.getPatientByUserId(this.currentUser.getUser_id());
+
+        // Hoşgeldiniz mesajını güncelle
         welcomeLabel.setText("Hoş Geldiniz, " + currentUser.getAd() + " " + currentUser.getSoyad());
+
+        // Üst panelde profil resmini güncelle (eğer değiştiyse)
+        Component[] components = ((JPanel)((JPanel)getComponent(0)).getComponent(0)).getComponents();
+        for (Component c : components) {
+            if (c instanceof JLabel && c != welcomeLabel) {
+                JLabel imageLabel = (JLabel)c;
+                // Mevcut profil resmini kaldır
+                imageLabel.setIcon(null);
+                // Yeni profil resmini yükle
+                if (patient != null && patient.getProfil_resmi() != null && patient.getProfil_resmi().length > 0) {
+                    try {
+                        ByteArrayInputStream bis = new ByteArrayInputStream(patient.getProfil_resmi());
+                        BufferedImage originalImage = ImageIO.read(bis);
+                        if (originalImage != null) {
+                            Image scaledImage = originalImage.getScaledInstance(75, 75, Image.SCALE_SMOOTH);
+                            imageLabel.setIcon(new ImageIcon(scaledImage));
+                        } else {
+                            createDefaultProfileImage(imageLabel);
+                        }
+                    } catch (IOException e) {
+                        createDefaultProfileImage(imageLabel);
+                    }
+                } else {
+                    createDefaultProfileImage(imageLabel);
+                }
+                break;
+            }
+        }
+
+        // TODO: Verileri yükle ve panelleri güncelle - veritabanından güncel bilgileri çek
     }
 }

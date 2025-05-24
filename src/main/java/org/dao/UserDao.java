@@ -62,11 +62,13 @@ public class UserDao implements IUserDao {
             throw new IllegalArgumentException("User cannot be null");
         }
 
-        // TC kimlik ve email kontrolü
-        if (user.getTc_kimlik() == null || user.getTc_kimlik().isEmpty() ||
-                user.getEmail() == null || user.getEmail().isEmpty()) {
-            throw new IllegalArgumentException("TC kimlik ve email zorunludur");
+        // Profil resmi debug bilgisi
+        if (user.getProfil_resmi() != null) {
+            System.out.println("Kaydedilecek profil resmi boyutu: " + user.getProfil_resmi().length + " bytes");
+        } else {
+            System.out.println("Profil resmi null, resim olmadan kaydediliyor");
         }
+
 
         if (user.getUser_id() == null) {
             // Insert
@@ -81,9 +83,23 @@ public class UserDao implements IUserDao {
                 stmt.setString(3, user.getEmail());
                 stmt.setString(4, user.getAd());
                 stmt.setString(5, user.getSoyad());
-                stmt.setDate(6, java.sql.Date.valueOf(user.getDogum_tarihi()));
+
+                // Doğum tarihi null kontrolü
+                if (user.getDogum_tarihi() != null) {
+                    stmt.setDate(6, java.sql.Date.valueOf(user.getDogum_tarihi()));
+                } else {
+                    stmt.setNull(6, Types.DATE);
+                }
+
                 stmt.setString(7, String.valueOf(user.getCinsiyet()));
-                stmt.setBytes(8, user.getProfil_resmi());
+
+                // Profil resmi kontrolü
+                if (user.getProfil_resmi() != null && user.getProfil_resmi().length > 0) {
+                    stmt.setBytes(8, user.getProfil_resmi());
+                } else {
+                    stmt.setNull(8, Types.BINARY);
+                }
+
                 stmt.setString(9, user.getKullanici_tipi());
                 stmt.setTimestamp(10, Timestamp.valueOf(user.getCreated_at() != null ? user.getCreated_at() : LocalDateTime.now()));
 
@@ -107,9 +123,23 @@ public class UserDao implements IUserDao {
                 stmt.setString(3, user.getEmail());
                 stmt.setString(4, user.getAd());
                 stmt.setString(5, user.getSoyad());
-                stmt.setDate(6, java.sql.Date.valueOf(user.getDogum_tarihi()));
+
+                // Doğum tarihi null kontrolü
+                if (user.getDogum_tarihi() != null) {
+                    stmt.setDate(6, java.sql.Date.valueOf(user.getDogum_tarihi()));
+                } else {
+                    stmt.setNull(6, Types.DATE);
+                }
+
                 stmt.setString(7, String.valueOf(user.getCinsiyet()));
-                stmt.setBytes(8, user.getProfil_resmi());
+
+                // Profil resmi kontrolü
+                if (user.getProfil_resmi() != null && user.getProfil_resmi().length > 0) {
+                    stmt.setBytes(8, user.getProfil_resmi());
+                } else {
+                    stmt.setNull(8, Types.BINARY);
+                }
+
                 stmt.setString(9, user.getKullanici_tipi());
                 stmt.setInt(10, user.getUser_id());
 
@@ -221,9 +251,22 @@ public class UserDao implements IUserDao {
         user.setEmail(rs.getString("email"));
         user.setAd(rs.getString("ad"));
         user.setSoyad(rs.getString("soyad"));
-        user.setDogum_tarihi(rs.getDate("dogum_tarihi").toLocalDate());
-        user.setCinsiyet(rs.getString("cinsiyet").charAt(0));
+
+        // Doğum tarihi null kontrolü
+        Date dogumTarihi = rs.getDate("dogum_tarihi");
+        if (dogumTarihi != null) {
+            user.setDogum_tarihi(dogumTarihi.toLocalDate());
+        }
+
+        // Cinsiyet kontrolü
+        String cinsiyet = rs.getString("cinsiyet");
+        if (cinsiyet != null && !cinsiyet.isEmpty()) {
+            user.setCinsiyet(cinsiyet.charAt(0));
+        }
+
+        // Profil resmi
         user.setProfil_resmi(rs.getBytes("profil_resmi"));
+
         user.setKullanici_tipi(rs.getString("kullanici_tipi"));
 
         Timestamp createdAt = rs.getTimestamp("created_at");

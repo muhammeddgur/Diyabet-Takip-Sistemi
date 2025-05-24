@@ -54,6 +54,13 @@ public class AuthenticationService {
                 return null;
             }
 
+            // Profil resmi kontrolü (debug için)
+            if (user.getProfil_resmi() != null) {
+                System.out.println("Login başarılı - Profil resmi mevcut: " + user.getProfil_resmi().length + " bytes");
+            } else {
+                System.out.println("Login başarılı - Profil resmi yok");
+            }
+
             // Son giriş zamanını güncelle
             user.setLast_login(LocalDateTime.now());
             userDao.updateLastLogin(user.getUser_id());
@@ -119,6 +126,12 @@ public class AuthenticationService {
             existingUser = userDao.findByEmail(user.getEmail());
             if (existingUser != null) {
                 System.err.println("Bu e-posta adresi ile kayıtlı bir kullanıcı zaten var.");
+                return null;
+            }
+
+            // Profil resmi kontrolü
+            if (user.getProfil_resmi() != null && user.getProfil_resmi().length > 2 * 1024 * 1024) {
+                System.err.println("Profil resmi boyutu çok büyük (maksimum 2MB).");
                 return null;
             }
 
