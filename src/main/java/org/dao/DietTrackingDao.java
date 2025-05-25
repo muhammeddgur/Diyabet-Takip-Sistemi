@@ -3,6 +3,7 @@ package org.dao;
 import org.model.DietTracking;
 
 import java.sql.*;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,6 +29,45 @@ public class DietTrackingDao implements IDietTrackingDao {
             }
             return null;
         }
+    }
+
+    /**
+     * Belirtilen hasta ve tarih aralığı için diyet uyum oranını hesaplar
+     * @param patientId Hasta ID
+     * @param startDate Başlangıç tarihi
+     * @param endDate Bitiş tarihi
+     * @return 0-100 arasında uyum yüzdesi
+     */
+    public double getComplianceRatio(Integer patientId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        String sql = """
+                 SELECT COUNT(*) AS total_count,
+                        SUM(CASE WHEN dt.uygulandı_mı = true THEN 1 ELSE 0 END) AS applied_count
+                 FROM diet_tracking dt
+                 JOIN patient_diets pd ON dt.patient_diet_id = pd.patient_diet_id
+                 WHERE pd.patient_id = ?
+                 AND dt.takip_tarihi BETWEEN ? AND ?
+                 """;
+
+        try (Connection connection = connectionManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setInt(1, patientId);
+            statement.setDate(2, Date.valueOf(startDate));
+            statement.setDate(3, Date.valueOf(endDate));
+
+            ResultSet rs = statement.executeQuery();
+
+            if (rs.next()) {
+                int totalCount = rs.getInt("total_count");
+                int appliedCount = rs.getInt("applied_count");
+
+                if (totalCount > 0) {
+                    return (double) appliedCount / totalCount * 100;
+                }
+            }
+        }
+
+        return 0.0; // Veri yoksa 0 döndür
     }
 
     @Override

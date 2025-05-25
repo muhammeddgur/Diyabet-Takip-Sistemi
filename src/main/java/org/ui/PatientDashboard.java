@@ -329,20 +329,28 @@ public class PatientDashboard extends JPanel {
 
             // MeasurementDao kullanarak bugünün verilerini al
             MeasurementDao measurementDao = new MeasurementDao();
-            List<BloodSugarMeasurement> todaysMeasurements = measurementDao.findByDateRange(
+            List<BloodSugarMeasurement> allMeasurements = measurementDao.findByDateRange(
                     patient.getPatient_id(),
                     today,
                     today
             );
 
-            if (todaysMeasurements.isEmpty()) {
-                JLabel noDataLabel = new JLabel("Bugün için kan şekeri ölçümü kaydedilmemiş", JLabel.CENTER);
+            // SADECE GEÇERLİ ÖLÇÜMLERİ FİLTRELE - YENİ KOD
+            List<BloodSugarMeasurement> validMeasurements = new ArrayList<>();
+            for (BloodSugarMeasurement measurement : allMeasurements) {
+                if (Boolean.TRUE.equals(measurement.getIs_valid_time())) {
+                    validMeasurements.add(measurement);
+                }
+            }
+
+            if (validMeasurements.isEmpty()) {
+                JLabel noDataLabel = new JLabel("Bugün için geçerli kan şekeri ölçümü kaydedilmemiş", JLabel.CENTER);
                 noDataLabel.setFont(new Font("Arial", Font.ITALIC, 14));
                 noDataLabel.setForeground(Color.GRAY);
                 chartPanel.add(noDataLabel, BorderLayout.CENTER);
             } else {
                 // Ölçümleri saate göre sırala
-                Collections.sort(todaysMeasurements, Comparator.comparing(m -> m.getOlcum_tarihi()));
+                Collections.sort(validMeasurements, Comparator.comparing(m -> m.getOlcum_tarihi()));
 
                 // Tek bir seri kullan, tüm noktaları içinde topla
                 XYSeries series = new XYSeries("Kan Şekeri");
@@ -350,8 +358,8 @@ public class PatientDashboard extends JPanel {
                 // Periyotları sakla (hangi XY değeri hangi periyoda ait)
                 final Map<Point2D, String> periodMap = new HashMap<>();
 
-                // Tüm ölçümleri tek seride topla
-                for (BloodSugarMeasurement measurement : todaysMeasurements) {
+                // SADECE GEÇERLİ ÖLÇÜMLERİ GRAFİĞE EKLE
+                for (BloodSugarMeasurement measurement : validMeasurements) {
                     LocalDateTime dateTime = measurement.getOlcum_tarihi();
                     long seconds = dateTime.getHour() * 3600L + dateTime.getMinute() * 60L;
                     double value = measurement.getOlcum_degeri();
@@ -421,10 +429,11 @@ public class PatientDashboard extends JPanel {
                 normalRange.setLabelPaint(new Color(0, 120, 0));
                 plot.addRangeMarker(normalRange);
 
-                // Özel Renderer - Periyoda göre farklı renk ama hepsi tek seride
+                // Özel Renderer - Çizgiler tek renk, noktalar periyoda göre renkli
                 XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer() {
+                    // Noktaların renklerini belirler
                     @Override
-                    public Paint getItemPaint(int series, int item) {
+                    public Paint getItemFillPaint(int series, int item) {
                         // Veri noktasının koordinatlarını al
                         XYDataset dataset = getPlot().getDataset();
                         double x = dataset.getXValue(series, item);
@@ -443,7 +452,13 @@ public class PatientDashboard extends JPanel {
                                 case "gece": return new Color(50, 50, 50);   // Siyah
                             }
                         }
-                        return super.getItemPaint(series, item);
+                        return super.getItemFillPaint(series, item);
+                    }
+
+                    // Noktaların kenarlık renklerini belirler
+                    @Override
+                    public Paint getItemOutlinePaint(int series, int item) {
+                        return getItemFillPaint(series, item);
                     }
                 };
 
@@ -454,6 +469,9 @@ public class PatientDashboard extends JPanel {
                 renderer.setDrawOutlines(true);
                 renderer.setUseFillPaint(true);
                 renderer.setDefaultFillPaint(Color.WHITE);
+
+                // Çizgilerin rengini ayarla (tüm çizgiler için tek renk)
+                renderer.setSeriesPaint(0, new Color(240, 0, 0, 255)); // Koyu mavi çizgi rengi
                 renderer.setSeriesStroke(0, new BasicStroke(2.0f)); // Kalın çizgi
 
                 // Renderer'ı ayarla
@@ -754,11 +772,57 @@ public class PatientDashboard extends JPanel {
         JPanel dietInfoPanel = new JPanel(new BorderLayout());
         dietInfoPanel.setBorder(BorderFactory.createTitledBorder("Diyet Planım"));
 
-        JTextArea dietDetailsArea = new JTextArea(5, 30);
-        dietDetailsArea.setText("Veri yok");
+        // Metin alanını daha büyük yap: 5 satır yerine 12 satır
+        JTextArea dietDetailsArea = new JTextArea(8, 35); // Satır sayısını 12'ye, sütun sayısını 40'a çıkardık
         dietDetailsArea.setEditable(false);
         dietDetailsArea.setBackground(null);
+        dietDetailsArea.setLineWrap(true);
+        dietDetailsArea.setWrapStyleWord(true);
+        dietDetailsArea.setFont(new Font("SansSerif", Font.PLAIN, 13)); // Font boyutunu 14'ten 13'e düşürdük
+
+        // Güncel diyet planını yükle
+        try {
+            // Hasta için mevcut diyet bilgilerini getir
+            DietDao dietDao = new DietDao();
+            PatientDietsDao patientDietsDao = new PatientDietsDao();
+            List<PatientDiet> patientDiets = patientDietsDao.findByPatientId(patient.getPatient_id());
+
+            if (!patientDiets.isEmpty()) {
+                // En son eklenen diyeti al (tarihe göre sıralama DAO'da yapılabilir)
+                PatientDiet currentDiet = patientDiets.get(0);
+                for (PatientDiet pd : patientDiets) {
+                    if (pd.getBaslangicTarihi().isAfter(currentDiet.getBaslangicTarihi())) {
+                        currentDiet = pd;
+                    }
+                }
+
+                // Diyetin detaylarını al
+                Diet diet = dietDao.findById(currentDiet.getDietId());
+                if (diet != null) {
+                    StringBuilder dietInfo = new StringBuilder();
+                    dietInfo.append("Diyet Adı: ").append(diet.getDiet_adi()).append("\n\n");
+                    dietInfo.append("Başlangıç Tarihi: ").append(currentDiet.getBaslangicTarihi().format(dateFormatter)).append("\n\n");
+                    dietInfo.append("Açıklama:\n").append(diet.getAciklama());
+
+                    dietDetailsArea.setText(dietInfo.toString());
+                    dietDetailsArea.setCaretPosition(0); // Yazı alanının başından başla
+                } else {
+                    dietDetailsArea.setText("Diyet detayları bulunamadı.");
+                }
+            } else {
+                dietDetailsArea.setText("Henüz bir diyet planınız bulunmuyor.");
+            }
+        } catch (SQLException e) {
+            dietDetailsArea.setText("Diyet planı yüklenirken bir hata oluştu: " + e.getMessage());
+            System.err.println("Diyet planı yüklenirken hata: " + e.getMessage());
+            e.printStackTrace();
+        }
+
         JScrollPane dietScrollPane = new JScrollPane(dietDetailsArea);
+        // Taşma durumunda yatay kaydırma çubuğunu gösterme, dikey kaydırma çubuğunu her zaman göster
+        dietScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        dietScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        dietScrollPane.setPreferredSize(new Dimension(500, 180)); // 550x250 → 500x180
         dietInfoPanel.add(dietScrollPane, BorderLayout.CENTER);
 
         panel.add(dietInfoPanel, BorderLayout.NORTH);
@@ -787,7 +851,6 @@ public class PatientDashboard extends JPanel {
         JButton reportButton = new JButton("Bildir");
         reportButton.addActionListener(e -> {
             addDietTracking(dietStatusCombo, panel);
-
         });
         reportPanel.add(reportButton, gbc);
 
@@ -796,15 +859,40 @@ public class PatientDashboard extends JPanel {
         return panel;
     }
 
+    /**
+     * Diyet durumu bildirimi ekler
+     */
     private void addDietTracking(JComboBox<String> dietStatusCombo, JPanel panel) {
         PatientDietsDao patientDietsDao = new PatientDietsDao();
         DietTracking dietTracking = new DietTracking();
         DietTrackingDao dietTrackingDao = new DietTrackingDao();
 
         try {
-            Integer latestDietId = patientDietsDao.findLatestPatientDietIdByPatientId(patient.getPatient_id());
-            dietTracking.setPatient_diet_id(latestDietId);
+            // En son diyet ID'sini almaya çalış
+            Integer latestDietId = null;
+            try {
+                latestDietId = patientDietsDao.findLatestPatientDietIdByPatientId(patient.getPatient_id());
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(
+                        panel,
+                        "Size tanımlanmış bir diyet planı bulunmuyor. Lütfen doktorunuzla iletişime geçin.",
+                        "Diyet Planı Eksik",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
 
+            if (latestDietId == null) {
+                JOptionPane.showMessageDialog(
+                        panel,
+                        "Size tanımlanmış bir diyet planı bulunmuyor. Lütfen doktorunuzla iletişime geçin.",
+                        "Diyet Planı Eksik",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            dietTracking.setPatient_diet_id(latestDietId);
             dietTracking.setTakip_tarihi(LocalDate.now());
 
             if (dietStatusCombo.getSelectedItem().toString().toLowerCase().contains("evet"))
@@ -814,16 +902,23 @@ public class PatientDashboard extends JPanel {
 
             dietTrackingDao.save(dietTracking);
 
-            JOptionPane.showMessageDialog(panel,
+            JOptionPane.showMessageDialog(
+                    panel,
                     "Diyet durumu başarıyla bildirildi:\n" + dietStatusCombo.getSelectedItem(),
                     "Başarılı",
-                    JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+            // Ana sayfayı güncelle
+            loadDashboardData();
 
         } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
+            JOptionPane.showMessageDialog(
+                    panel,
                     "Veritabanı hatası: " + e.getMessage(),
                     "Hata",
-                    JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
@@ -839,11 +934,72 @@ public class PatientDashboard extends JPanel {
         JPanel exerciseInfoPanel = new JPanel(new BorderLayout());
         exerciseInfoPanel.setBorder(BorderFactory.createTitledBorder("Egzersiz Planım"));
 
-        JTextArea exerciseDetailsArea = new JTextArea(5, 30);
-        exerciseDetailsArea.setText("Veri yok");
+        JTextArea exerciseDetailsArea = new JTextArea(8, 35);
         exerciseDetailsArea.setEditable(false);
         exerciseDetailsArea.setBackground(null);
+        exerciseDetailsArea.setLineWrap(true);
+        exerciseDetailsArea.setWrapStyleWord(true);
+        exerciseDetailsArea.setFont(new Font("SansSerif", Font.PLAIN, 13)); // Font boyutunu 14'ten 13'e düşürdük
+
+        // Güncel egzersiz planını yükle
+        try {
+            // Hasta için mevcut egzersiz bilgilerini getir
+            ExerciseDao exerciseDao = new ExerciseDao();
+            PatientExercisesDao patientExercisesDao = new PatientExercisesDao();
+            List<Exercise> patientExercises = new ArrayList<>();
+
+            // Patient ID kullanarak tüm egzersizleri çekmeye çalış
+            try {
+                patientExercises = exerciseDao.getPatientExercises(patient.getPatient_id());
+            } catch (SQLException ex) {
+                System.err.println("Hastanın egzersiz listesi alınamadı: " + ex.getMessage());
+            }
+
+            if (!patientExercises.isEmpty()) {
+                // İlk egzersiz planını göster (varsayılan olarak)
+                Exercise exercise = patientExercises.get(0);
+
+                // PatientExercise bilgisini al (başlangıç tarihi için)
+                PatientExercise patientExercise = null;
+                try {
+                    Integer exerciseId = exercise.getExercise_id();
+                    List<PatientExercise> peList = patientExercisesDao.findAll();
+                    for (PatientExercise pe : peList) {
+                        if (pe.getPatientId() == patient.getPatient_id() &&
+                                pe.getExerciseId() == exerciseId) {
+                            patientExercise = pe;
+                            break;
+                        }
+                    }
+                } catch (SQLException ex) {
+                    System.err.println("PatientExercise bilgisi alınamadı: " + ex.getMessage());
+                }
+
+                StringBuilder exerciseInfo = new StringBuilder();
+                exerciseInfo.append("Egzersiz Adı: ").append(exercise.getExercise_adi()).append("\n\n");
+
+                if (patientExercise != null) {
+                    exerciseInfo.append("Başlangıç Tarihi: ").append(
+                            patientExercise.getBaslangicTarihi().format(dateFormatter)).append("\n\n");
+                }
+
+                exerciseInfo.append("Açıklama:\n").append(exercise.getAciklama());
+
+                exerciseDetailsArea.setText(exerciseInfo.toString());
+                exerciseDetailsArea.setCaretPosition(0); // Yazı alanının başından başla
+            } else {
+                exerciseDetailsArea.setText("Henüz bir egzersiz planınız bulunmuyor.");
+            }
+        } catch (Exception e) {
+            exerciseDetailsArea.setText("Egzersiz planı yüklenirken bir hata oluştu: " + e.getMessage());
+            System.err.println("Egzersiz planı yüklenirken hata: " + e.getMessage());
+            e.printStackTrace();
+        }
+
         JScrollPane exerciseScrollPane = new JScrollPane(exerciseDetailsArea);
+        exerciseScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        exerciseScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        exerciseScrollPane.setPreferredSize(new Dimension(500, 180)); // 550x250 → 500x180
         exerciseInfoPanel.add(exerciseScrollPane, BorderLayout.CENTER);
 
         panel.add(exerciseInfoPanel, BorderLayout.NORTH);
@@ -872,7 +1028,6 @@ public class PatientDashboard extends JPanel {
         JButton reportButton = new JButton("Bildir");
         reportButton.addActionListener(e -> {
             addExerciseTracking(exerciseStatusCombo, panel);
-
         });
         reportPanel.add(reportButton, gbc);
 
@@ -881,15 +1036,40 @@ public class PatientDashboard extends JPanel {
         return panel;
     }
 
+    /**
+     * Egzersiz durumu bildirimi ekler
+     */
     private void addExerciseTracking(JComboBox<String> exerciseStatusCombo, JPanel panel) {
         PatientExercisesDao patientExercisesDao = new PatientExercisesDao();
         ExerciseTracking exerciseTracking = new ExerciseTracking();
         ExerciseTrackingDao exerciseTrackingDao = new ExerciseTrackingDao();
 
         try {
-            Integer latestExerciseId = patientExercisesDao.findLatestPatientExerciseIdByPatientId(patient.getPatient_id());
-            exerciseTracking.setPatient_exercise_id(latestExerciseId);
+            // En son egzersiz ID'sini almaya çalış
+            Integer latestExerciseId = null;
+            try {
+                latestExerciseId = patientExercisesDao.findLatestPatientExerciseIdByPatientId(patient.getPatient_id());
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(
+                        panel,
+                        "Size tanımlanmış bir egzersiz planı bulunmuyor. Lütfen doktorunuzla iletişime geçin.",
+                        "Egzersiz Planı Eksik",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
 
+            if (latestExerciseId == null) {
+                JOptionPane.showMessageDialog(
+                        panel,
+                        "Size tanımlanmış bir egzersiz planı bulunmuyor. Lütfen doktorunuzla iletişime geçin.",
+                        "Egzersiz Planı Eksik",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            exerciseTracking.setPatient_exercise_id(latestExerciseId);
             exerciseTracking.setTakip_tarihi(LocalDate.now());
 
             if (exerciseStatusCombo.getSelectedItem().toString().toLowerCase().contains("evet"))
@@ -899,16 +1079,23 @@ public class PatientDashboard extends JPanel {
 
             exerciseTrackingDao.save(exerciseTracking);
 
-            JOptionPane.showMessageDialog(panel,
+            JOptionPane.showMessageDialog(
+                    panel,
                     "Egzersiz durumu başarıyla bildirildi.",
                     "Başarılı",
-                    JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+            // Ana sayfayı güncelle
+            loadDashboardData();
 
         } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
+            JOptionPane.showMessageDialog(
+                    panel,
                     "Veritabanı hatası: " + e.getMessage(),
                     "Hata",
-                    JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
@@ -944,71 +1131,226 @@ public class PatientDashboard extends JPanel {
     }
 
     /**
-     * Ana sayfa verilerini yükler
+     * Ana sayfa verilerini yükler ve dashboard bileşenlerini günceller
      */
     private void loadDashboardData() {
+        // Hasta bilgisi kontrolü
         if (patient == null || patient.getPatient_id() == null) {
+            System.err.println("Hasta bilgisi bulunamadı, dashboard verileri yüklenemedi.");
             return;
         }
 
-        try {
-            // Günlük ortalama kan şekeri değeri
-            MeasurementDao measurementDao = new MeasurementDao();
-            double dailyAverage = 0;
+        // Tarih aralığı için değişkenler
+        LocalDate today = LocalDate.now();
+        LocalDate oneWeekAgo = today.minusWeeks(1);
+        int patientId = patient.getPatient_id();
 
-            try {
-                // Bugünün tarihini al
-                LocalDate today = LocalDate.now();
-                dailyAverage = measurementDao.getDailyAverage(patient.getPatient_id(), today);
-            } catch (Exception e) {
-                System.err.println("Günlük ortalama hesaplanamadı: " + e.getMessage());
-            }
+        // 1. KAN ŞEKERİ ORTALAMASI
+        loadBloodSugarAverage(patientId, today);
+
+        // 2. DİYET UYUM ORANI
+        loadDietComplianceData(patientId, oneWeekAgo, today);
+
+        // 3. EGZERSİZ UYUM ORANI
+        loadExerciseComplianceData(patientId, oneWeekAgo, today);
+
+        // 4. GÜNLÜK KAN ŞEKERİ DEĞERLERİ TABLOSU
+        loadDailyBloodSugarValues(patientId, today);
+    }
+
+    /**
+     * Günlük ortalama kan şekeri değerini yükler
+     */
+    private void loadBloodSugarAverage(int patientId, LocalDate today) {
+        try {
+            MeasurementDao measurementDao = new MeasurementDao();
+            double dailyAverage = measurementDao.getDailyAverage(patientId, today);
 
             if (dailyAverage > 0) {
+                // Değer formatı: "95.5 mg/dL"
                 avgValueLabel.setText(String.format("%.1f mg/dL", dailyAverage));
+
+                // Değere göre renklendirme
+                if (dailyAverage < 70) {
+                    // Düşük kan şekeri - tehlikeli
+                    avgValueLabel.setForeground(new Color(220, 0, 0));
+                    avgValueLabel.setToolTipText("Kan şekeri düşük - dikkat ediniz!");
+                } else if (dailyAverage > 110) {
+                    // Yüksek kan şekeri - tehlikeli
+                    avgValueLabel.setForeground(new Color(220, 0, 0));
+                    avgValueLabel.setToolTipText("Kan şekeri yüksek - dikkat ediniz!");
+                } else {
+                    // Normal aralık (70-110)
+                    avgValueLabel.setForeground(new Color(0, 150, 0));
+                    avgValueLabel.setToolTipText("Kan şekeri normal aralıkta");
+                }
             } else {
+                // Veri yoksa
                 avgValueLabel.setText("Veri yok");
+                avgValueLabel.setForeground(Color.GRAY);
+                avgValueLabel.setToolTipText("Bugün için kan şekeri ölçümü bulunamadı");
             }
+        } catch (Exception e) {
+            avgValueLabel.setText("Hesaplanamadı");
+            avgValueLabel.setForeground(Color.RED);
+            avgValueLabel.setToolTipText("Hata: " + e.getMessage());
+            System.err.println("Günlük kan şekeri ortalaması hesaplanırken hata: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
-            // Günlük ölçüm değerlerini yükle - SADECE BUGÜNÜN VERİLERİ
-            try {
-                // Bugünün tarihini al
-                LocalDate today = LocalDate.now();
+    /**
+     * Diyet uyum oranını hesaplar ve görüntüler
+     */
+    private void loadDietComplianceData(int patientId, LocalDate startDate, LocalDate endDate) {
+        try {
+            DietTrackingDao dietTrackingDao = new DietTrackingDao();
+            double dietCompliance = dietTrackingDao.getComplianceRatio(patientId, startDate, endDate);
 
-                // Bugüne ait ölçümleri al
-                List<BloodSugarMeasurement> todaysMeasurements = measurementDao.findByDateRange(
-                        patient.getPatient_id(),
-                        today,    // Bugünün başlangıcı
-                        today     // Bugünün sonu
-                );
+            if (dietCompliance > 0) {
+                // Yüzdeye çevir ve yuvarlak değer al
+                int compliancePercent = (int) Math.round(dietCompliance);
 
-                // Periyot bazında değer haritası
-                Map<String, Integer> valuesByPeriod = new HashMap<>();
-                String[] dbPeriods = {"sabah", "ogle", "ikindi", "aksam", "gece"};
+                // İlerleme çubuğunu güncelle
+                dietProgress.setValue(compliancePercent);
+                dietProgress.setString(compliancePercent + "%");
 
-                // Bugünün ölçümlerini haritaya ekle
-                for (BloodSugarMeasurement measurement : todaysMeasurements) {
+                // Uyum oranına göre renklendirme
+                Color progressColor;
+                String tooltip;
+
+                if (compliancePercent < 40) {
+                    // Düşük uyum - kötü
+                    progressColor = new Color(220, 0, 0); // Kırmızı
+                    tooltip = "Diyet uyum oranınız düşük. Lütfen diyetinize daha dikkat ediniz.";
+                } else if (compliancePercent < 70) {
+                    // Orta uyum - geliştirilmeli
+                    progressColor = new Color(255, 165, 0); // Turuncu
+                    tooltip = "Diyet uyumunuz orta seviyede. Daha iyi olabilir!";
+                } else {
+                    // Yüksek uyum - iyi
+                    progressColor = new Color(0, 150, 0); // Yeşil
+                    tooltip = "Diyet uyumunuz çok iyi. Devam ediniz!";
+                }
+
+                dietProgress.setForeground(progressColor);
+                dietProgress.setToolTipText(tooltip);
+
+            } else {
+                // Veri yoksa
+                dietProgress.setValue(0);
+                dietProgress.setString("Veri yok");
+                dietProgress.setToolTipText("Son bir hafta içinde diyet takibi bulunamadı");
+            }
+        } catch (Exception e) {
+            // Hata durumunda
+            dietProgress.setValue(0);
+            dietProgress.setString("Hesaplanamadı");
+            dietProgress.setToolTipText("Hata: " + e.getMessage());
+            System.err.println("Diyet uyum oranı hesaplanırken hata: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Egzersiz uyum oranını hesaplar ve görüntüler
+     */
+    private void loadExerciseComplianceData(int patientId, LocalDate startDate, LocalDate endDate) {
+        try {
+            ExerciseTrackingDao exerciseTrackingDao = new ExerciseTrackingDao();
+            double exerciseCompliance = exerciseTrackingDao.getComplianceRatio(patientId, startDate, endDate);
+
+            if (exerciseCompliance > 0) {
+                // Yüzdeye çevir ve yuvarlak değer al
+                int compliancePercent = (int) Math.round(exerciseCompliance);
+
+                // İlerleme çubuğunu güncelle
+                exerciseProgress.setValue(compliancePercent);
+                exerciseProgress.setString(compliancePercent + "%");
+
+                // Uyum oranına göre renklendirme
+                Color progressColor;
+                String tooltip;
+
+                if (compliancePercent < 40) {
+                    // Düşük uyum - kötü
+                    progressColor = new Color(220, 0, 0); // Kırmızı
+                    tooltip = "Egzersiz uyum oranınız düşük. Lütfen egzersizlerinize daha dikkat ediniz.";
+                } else if (compliancePercent < 70) {
+                    // Orta uyum - geliştirilmeli
+                    progressColor = new Color(255, 165, 0); // Turuncu
+                    tooltip = "Egzersiz uyumunuz orta seviyede. Daha iyi olabilir!";
+                } else {
+                    // Yüksek uyum - iyi
+                    progressColor = new Color(0, 150, 0); // Yeşil
+                    tooltip = "Egzersiz uyumunuz çok iyi. Devam ediniz!";
+                }
+
+                exerciseProgress.setForeground(progressColor);
+                exerciseProgress.setToolTipText(tooltip);
+
+            } else {
+                // Veri yoksa
+                exerciseProgress.setValue(0);
+                exerciseProgress.setString("Veri yok");
+                exerciseProgress.setToolTipText("Son bir hafta içinde egzersiz takibi bulunamadı");
+            }
+        } catch (Exception e) {
+            // Hata durumunda
+            exerciseProgress.setValue(0);
+            exerciseProgress.setString("Hesaplanamadı");
+            exerciseProgress.setToolTipText("Hata: " + e.getMessage());
+            System.err.println("Egzersiz uyum oranı hesaplanırken hata: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Günlük kan şekeri ölçüm değerlerini tabloya yükler
+     */
+    private void loadDailyBloodSugarValues(int patientId, LocalDate today) {
+        try {
+            // MeasurementDao aracılığıyla bugünün verilerini al
+            MeasurementDao measurementDao = new MeasurementDao();
+            List<BloodSugarMeasurement> allMeasurements = measurementDao.findByDateRange(
+                    patientId,
+                    today,
+                    today
+            );
+
+            // Periyot bazında değerleri sakla
+            Map<String, Integer> valuesByPeriod = new HashMap<>();
+            String[] dbPeriods = {"sabah", "ogle", "ikindi", "aksam", "gece"};
+
+            // SADECE GEÇERLİ ÖLÇÜMLERİ TABLOYA EKLE - YENİ KOD
+            for (BloodSugarMeasurement measurement : allMeasurements) {
+                // Sadece geçerli zamanları ekliyoruz
+                if (Boolean.TRUE.equals(measurement.getIs_valid_time())) {
                     String period = measurement.getOlcum_zamani();
                     valuesByPeriod.put(period, measurement.getOlcum_degeri());
                 }
-
-                // Tablo modelini güncelle
-                for (int i = 0; i < dbPeriods.length; i++) {
-                    String value = "--";
-                    Integer measuredValue = valuesByPeriod.get(dbPeriods[i]);
-                    if (measuredValue != null) {
-                        value = measuredValue.toString();
-                    }
-                    dailyValuesModel.setValueAt(value, 1, i);
-                }
-
-            } catch (Exception e) {
-                System.err.println("Günlük ölçüm değerleri yüklenirken hata: " + e.getMessage());
-                e.printStackTrace();
             }
 
+            // Tablo modelini güncelle
+            for (int i = 0; i < dbPeriods.length; i++) {
+                String value = "--";
+                Integer measuredValue = valuesByPeriod.get(dbPeriods[i]);
+
+                if (measuredValue != null) {
+                    value = measuredValue.toString();
+                }
+
+                dailyValuesModel.setValueAt(value, 1, i);
+            }
         } catch (Exception e) {
-            System.err.println("Ana sayfa verileri yüklenirken hata: " + e.getMessage());
+            System.err.println("Günlük ölçüm değerleri yüklenirken hata: " + e.getMessage());
+            e.printStackTrace();
+
+            // Hata durumunda tüm hücreleri temizle
+            String[] dbPeriods = {"sabah", "ogle", "ikindi", "aksam", "gece"};
+            for (int i = 0; i < dbPeriods.length; i++) {
+                dailyValuesModel.setValueAt("Hata", 1, i);
+            }
         }
     }
 
