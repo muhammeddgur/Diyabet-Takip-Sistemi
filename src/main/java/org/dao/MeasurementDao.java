@@ -60,6 +60,29 @@ public class MeasurementDao implements IMeasurementDao {
         return measurements;
     }
 
+    public boolean hasValidMeasurementForPeriodAndDate(Integer patientId, String period, LocalDate date) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM blood_sugar_measurements " +
+                "WHERE patient_id = ? " +
+                "AND olcum_zamani = ? " +
+                "AND DATE(olcum_tarihi) = ? " +
+                "AND is_valid_time = TRUE";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, patientId);
+            stmt.setString(2, period);
+            stmt.setDate(3, java.sql.Date.valueOf(date));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean save(BloodSugarMeasurement measurement) throws SQLException {
         if (measurement.getMeasurement_id() == null) {

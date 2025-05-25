@@ -676,15 +676,35 @@ public class PatientDashboard extends JPanel {
             String selectedPeriod = (String) periodCombo.getSelectedItem();
             String dbPeriod = periodMap.get(selectedPeriod);
 
+            // Bugünün tarihini al
+            LocalDate today = LocalDate.now();
+
+            // Aynı gün ve periyotta ölçüm var mı kontrolü
+            try {
+                MeasurementDao measurementDao = new MeasurementDao();
+                if (measurementDao.hasValidMeasurementForPeriodAndDate(patient.getPatient_id(), dbPeriod, today)) {
+                    JOptionPane.showMessageDialog(this,
+                            "Bugün " + selectedPeriod + " için zaten bir ölçüm girdiniz!\n" +
+                                    "Aynı gün ve periyotta birden fazla ölçüm yapılamaz.",
+                            "Uyarı",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Veritabanı kontrol hatası: " + e.getMessage(),
+                        "Veritabanı Hatası", JOptionPane.ERROR_MESSAGE);
+                e.printStackTrace();
+                return;
+            }
+
             // Ölçüm nesnesi oluştur
             BloodSugarMeasurement measurement = new BloodSugarMeasurement();
             measurement.setPatient(patient);
             measurement.setPatient_id(patient.getPatient_id());
             measurement.setOlcum_degeri(value);
             measurement.setOlcum_zamani(dbPeriod); // VT uyumlu format
-            measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime());
+            measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime());//Burada valid_time güncellenir
             measurement.setInsulin_miktari(0.0);
-            measurement.setIs_valid_time(true);
 
             // Service aracılığıyla Dao kullanarak tabloya ekler
             boolean success = measurementService.addMeasurement(measurement);
@@ -693,7 +713,6 @@ public class PatientDashboard extends JPanel {
                 MeasurementDao measurementDao = new MeasurementDao();
                 InsulinReferenceDao insulinReferenceDao = new InsulinReferenceDao();
 
-                measurementDao.updateFlag(measurement.getMeasurement_id());
                 int averageValue = (int) measurementDao.getDailyAverage(measurement.getPatient_id(), measurement.getOlcum_tarihi().toLocalDate());
                 InsulinReference insulinReference = insulinReferenceDao.findByBloodSugarValue(averageValue);
                 measurement.setInsulin_miktari(insulinReference.getInsulin_dose());
@@ -705,11 +724,19 @@ public class PatientDashboard extends JPanel {
             }
 
             if (success) {
-                JOptionPane.showMessageDialog(this,
-                        "Kan şekeri ölçümü başarıyla kaydedildi.",
-                        "İşlem Başarılı",
-                        JOptionPane.INFORMATION_MESSAGE);
-
+                if (measurement.getIs_valid_time()) {
+                    JOptionPane.showMessageDialog(this,
+                            "Kan şekeri ölçümü başarıyla kaydedildi.",
+                            "İşlem Başarılı",
+                            JOptionPane.INFORMATION_MESSAGE);
+                }
+                else{
+                    JOptionPane.showMessageDialog(this,
+                            "Kan şekeri ölçümü kaydedildi fakat ölçüm ortalamaya dahil edilmedi.\n" +
+                                    "İstenilen saat aralığında ölçüm yapmaya dikkat ediniz.",
+                            "Uyarı",
+                            JOptionPane.WARNING_MESSAGE);
+                }
                 // Form alanlarını temizle
                 measurementField.setText("");
                 periodCombo.setSelectedIndex(0);

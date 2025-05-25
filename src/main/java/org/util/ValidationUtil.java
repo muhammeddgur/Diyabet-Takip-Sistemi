@@ -131,21 +131,7 @@ public class ValidationUtil {
         return value != null && value >= 0 && value <= 1000;
     }
 
-    /**
-     * Belirtilen zaman, belirtilen periyoda ait mi kontrol eder.
-     *
-     * @param period Periyod (MORNING, NOON, AFTERNOON, EVENING, NIGHT)
-     * @param time Kontrol edilecek zaman
-     * @return Periyoda ait ise true, değilse false
-     */
-    public static boolean validateTimeRange(String period, LocalTime time) {
-        if (time == null || period == null) {
-            return false;
-        }
 
-        String calculatedPeriod = DateTimeUtil.getMeasurementPeriod(time);
-        return period.equals(calculatedPeriod);
-    }
 
     /**
      * Ad ve soyadın geçerli olup olmadığını kontrol eder.
@@ -158,42 +144,5 @@ public class ValidationUtil {
      */
     public static boolean validateName(String name) {
         return name != null && name.length() >= 2 && name.matches("[a-zA-ZçÇğĞıİöÖşŞüÜ ]+");
-    }
-
-    /**
-     * Telefon numarasının geçerli olup olmadığını kontrol eder.
-     * - 10 veya 11 haneli olmalı
-     * - Sadece rakam içermeli
-     * - 11 haneli ise 0 ile başlamalı
-     *
-     * @param phone Telefon numarası
-     * @return Geçerli ise true, değilse false
-     */
-    public static boolean validatePhone(String phone) {
-        if (phone == null) {
-            return false;
-        }
-
-        // Boşlukları ve karakterleri temizle
-        phone = phone.replaceAll("[^0-9]", "");
-
-        if (phone.length() == 10) {
-            return true;
-        } else if (phone.length() == 11 && phone.charAt(0) == '0') {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Yaşın geçerli bir aralıkta olup olmadığını kontrol eder.
-     * 0-120 yaş arası geçerli kabul edilir.
-     *
-     * @param age Yaş
-     * @return Geçerli aralıkta ise true, değilse false
-     */
-    public static boolean validateAge(Integer age) {
-        return age != null && age >= 0 && age <= 120;
     }
 }
