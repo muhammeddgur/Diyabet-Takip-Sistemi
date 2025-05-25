@@ -4,8 +4,7 @@ import java.time.LocalDate;
 
 public class DietTracking {
     private Integer tracking_id;
-    private Patient patient;
-    private Diet diet;
+    private Integer patient_diet_id;
     private LocalDate takip_tarihi;
     private Boolean uygulandi_mi;
 
@@ -14,9 +13,8 @@ public class DietTracking {
         this.takip_tarihi = LocalDate.now();
     }
 
-    public DietTracking(Patient patient, Diet diet, Boolean uygulandi_mi) {
-        this.patient = patient;
-        this.diet = diet;
+    public DietTracking(Integer patient_diet_id, Boolean uygulandi_mi) {
+        this.patient_diet_id = patient_diet_id;
         this.takip_tarihi = LocalDate.now();
         this.uygulandi_mi = uygulandi_mi;
     }
@@ -30,20 +28,12 @@ public class DietTracking {
         this.tracking_id = tracking_id;
     }
 
-    public Patient getPatient() {
-        return patient;
+    public Integer getPatient_diet_id() {
+        return patient_diet_id;
     }
 
-    public void setPatient(Patient patient) {
-        this.patient = patient;
-    }
-
-    public Diet getDiet() {
-        return diet;
-    }
-
-    public void setDiet(Diet diet) {
-        this.diet = diet;
+    public void setPatient_diet_id(Integer patient_diet_id) {
+        this.patient_diet_id = patient_diet_id;
     }
 
     public LocalDate getTakip_tarihi() {
@@ -66,8 +56,6 @@ public class DietTracking {
     public String toString() {
         return "DietTracking{" +
                 "tracking_id=" + tracking_id +
-                ", patient=" + (patient != null ? patient.getAd() + " " + patient.getSoyad() : "Bilinmeyen") +
-                ", diet=" + (diet != null ? diet.getDiet_adi() : "Bilinmeyen") +
                 ", takip_tarihi=" + takip_tarihi +
                 ", uygulandı_mı=" + uygulandi_mi +
                 '}';

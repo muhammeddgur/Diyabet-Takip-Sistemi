@@ -1,6 +1,5 @@
 package org.ui;
-import org.dao.InsulinReferenceDao;
-import org.dao.MeasurementDao;
+import org.dao.*;
 import org.jfree.chart.*;
 import org.jfree.chart.labels.StandardXYToolTipGenerator;
 import org.jfree.chart.title.LegendTitle;
@@ -787,11 +786,8 @@ public class PatientDashboard extends JPanel {
         gbc.anchor = GridBagConstraints.CENTER;
         JButton reportButton = new JButton("Bildir");
         reportButton.addActionListener(e -> {
-            // TODO: Diyet durumu kaydetme işlevi eklenecek
-            JOptionPane.showMessageDialog(panel,
-                    "Diyet durumu başarıyla bildirildi:\n" + dietStatusCombo.getSelectedItem(),
-                    "Başarılı",
-                    JOptionPane.INFORMATION_MESSAGE);
+            addDietTracking(dietStatusCombo, panel);
+
         });
         reportPanel.add(reportButton, gbc);
 
@@ -799,6 +795,38 @@ public class PatientDashboard extends JPanel {
 
         return panel;
     }
+
+    private void addDietTracking(JComboBox<String> dietStatusCombo, JPanel panel) {
+        PatientDietsDao patientDietsDao = new PatientDietsDao();
+        DietTracking dietTracking = new DietTracking();
+        DietTrackingDao dietTrackingDao = new DietTrackingDao();
+
+        try {
+            Integer latestDietId = patientDietsDao.findLatestPatientDietIdByPatientId(patient.getPatient_id());
+            dietTracking.setPatient_diet_id(latestDietId);
+
+            dietTracking.setTakip_tarihi(LocalDate.now());
+
+            if (dietStatusCombo.getSelectedItem().toString().toLowerCase().contains("evet"))
+                dietTracking.setUygulandi_mi(true);
+            else
+                dietTracking.setUygulandi_mi(false);
+
+            dietTrackingDao.save(dietTracking);
+
+            JOptionPane.showMessageDialog(panel,
+                    "Diyet durumu başarıyla bildirildi:\n" + dietStatusCombo.getSelectedItem(),
+                    "Başarılı",
+                    JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Veritabanı hatası: " + e.getMessage(),
+                    "Hata",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
 
     /**
      * Egzersiz Takip Paneli
@@ -843,17 +871,45 @@ public class PatientDashboard extends JPanel {
         gbc.anchor = GridBagConstraints.CENTER;
         JButton reportButton = new JButton("Bildir");
         reportButton.addActionListener(e -> {
-            // TODO: Egzersiz durumu kaydetme işlevi eklenecek
-            JOptionPane.showMessageDialog(panel,
-                    "Egzersiz durumu başarıyla bildirildi.",
-                    "Başarılı",
-                    JOptionPane.INFORMATION_MESSAGE);
+            addExerciseTracking(exerciseStatusCombo, panel);
+
         });
         reportPanel.add(reportButton, gbc);
 
         panel.add(reportPanel, BorderLayout.CENTER);
 
         return panel;
+    }
+
+    private void addExerciseTracking(JComboBox<String> exerciseStatusCombo, JPanel panel) {
+        PatientExercisesDao patientExercisesDao = new PatientExercisesDao();
+        ExerciseTracking exerciseTracking = new ExerciseTracking();
+        ExerciseTrackingDao exerciseTrackingDao = new ExerciseTrackingDao();
+
+        try {
+            Integer latestExerciseId = patientExercisesDao.findLatestPatientExerciseIdByPatientId(patient.getPatient_id());
+            exerciseTracking.setPatient_exercise_id(latestExerciseId);
+
+            exerciseTracking.setTakip_tarihi(LocalDate.now());
+
+            if (exerciseStatusCombo.getSelectedItem().toString().toLowerCase().contains("evet"))
+                exerciseTracking.setUygulandi_mi(true);
+            else
+                exerciseTracking.setUygulandi_mi(false);
+
+            exerciseTrackingDao.save(exerciseTracking);
+
+            JOptionPane.showMessageDialog(panel,
+                    "Egzersiz durumu başarıyla bildirildi.",
+                    "Başarılı",
+                    JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Veritabanı hatası: " + e.getMessage(),
+                    "Hata",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**

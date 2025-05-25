@@ -1000,36 +1000,18 @@ public class DoctorDashboard extends JPanel {
                         measurement.setOlcum_degeri(bloodSugarValue);
                         measurement.setOlcum_zamani(bloodSugarPeriod);
                         measurement.setOlcum_tarihi(DateTimeUtil.getCurrentDateTime());
-                        measurement.setIs_valid_time(true); // Geçerli ölçüm zamanı
+                        measurement.setIs_valid_time(false); // Geçerli ölçüm zamanı
+                        measurement.setInsulin_miktari(0.0);
 
                         // Ölçümü veritabanına kaydet
                         boolean success = measurementService.addMeasurement(measurement);
 
                         if (success) {
+                            JOptionPane.showMessageDialog(this,
+                                    "Kan şekeri ölçümü başarıyla kaydedildi.",
+                                    "İşlem Başarılı",
+                                    JOptionPane.INFORMATION_MESSAGE);
                             System.out.println("Kan şekeri ölçümü kaydedildi: " + bloodSugarValue + " mg/dL");
-
-                            // İnsülin dozu hesaplama ve güncelleme
-                            try {
-                                MeasurementDao measurementDao = new MeasurementDao();
-                                InsulinReferenceDao insulinReferenceDao = new InsulinReferenceDao();
-
-                                // Ölçüm geçerli olarak işaretlenir
-                                measurementDao.updateFlag(measurement.getMeasurement_id());
-
-                                // Kan şekeri değerine göre insülin referansını bul
-                                InsulinReference insulinReference = insulinReferenceDao.findByBloodSugarValue(bloodSugarValue);
-
-                                // İnsülin miktarını ayarla
-                                if (insulinReference != null) {
-                                    double insulinDose = insulinReference.getInsulin_dose();
-                                    measurement.setInsulin_miktari(insulinDose);
-
-                                    // Veritabanında insülin miktarını güncelle
-                                    measurementDao.updateInsulinAmount(measurement.getMeasurement_id(), insulinDose);
-                                }
-                            } catch (SQLException ex) {
-                                System.err.println("İnsülin dozu kaydedilirken hata: " + ex.getMessage());
-                            }
                         }
                     } catch (Exception ex) {
                         System.err.println("Ölçüm kaydedilirken hata: " + ex.getMessage());
