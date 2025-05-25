@@ -1,25 +1,45 @@
 package org.ui;
-
 import org.dao.InsulinReferenceDao;
 import org.dao.MeasurementDao;
+import org.jfree.chart.*;
+import org.jfree.chart.labels.StandardXYToolTipGenerator;
+import org.jfree.chart.title.LegendTitle;
+import org.jfree.chart.ui.RectangleEdge;
 import org.model.*;
 import org.service.*;
 import org.util.DateTimeUtil;
-
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
+import org.jfree.chart.plot.XYPlot;
+import java.awt.BasicStroke;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.NumberTickUnit;
+import org.jfree.chart.plot.IntervalMarker;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
+import org.jfree.data.xy.XYDataset;
+import org.jfree.data.xy.XYSeries;
+import org.jfree.data.xy.XYSeriesCollection;
+import java.awt.geom.Ellipse2D;
+import java.text.FieldPosition;
+import java.text.NumberFormat;
+import java.text.ParsePosition;
+
 import java.util.List;
-import java.util.Map;
 
 /**
  * Hasta kontrol paneli
@@ -57,6 +77,9 @@ public class PatientDashboard extends JPanel {
 
     // Ölçüm zamanı için eşleştirme tablosu
     private Map<String, String> periodMap;
+
+    // Sınıf düzeyinde grafik paneli için değişken
+    private JPanel chartPanel;
 
     public PatientDashboard(User user, AuthenticationService authService, PatientService patientService, MainFrame parent) {
         this.currentUser = user;
@@ -245,7 +268,6 @@ public class PatientDashboard extends JPanel {
         dietProgress.setString("Veri yok");
         dietPanel.add(dietProgress, BorderLayout.CENTER);
         infoPanel.add(dietPanel);
-        // TODO: Diyet uyum oranı hesaplaması eklenecek
 
         // Günlük kan şekeri değerleri
         JPanel dailyMeasurementsPanel = new JPanel(new BorderLayout());
@@ -275,23 +297,258 @@ public class PatientDashboard extends JPanel {
         exerciseProgress.setString("Veri yok");
         exercisePanel.add(exerciseProgress, BorderLayout.CENTER);
         infoPanel.add(exercisePanel);
-        // TODO: Egzersiz uyum oranı hesaplaması eklenecek
 
         panel.add(infoPanel, BorderLayout.NORTH);
 
         // Orta kısım - Grafik alanı
-        JPanel chartPanel = new JPanel(new BorderLayout());
-        chartPanel.setBorder(BorderFactory.createTitledBorder("Kan Şekeri Değerleri (Son 7 Gün)"));
-        chartPanel.setPreferredSize(new Dimension(600, 300));
+        chartPanel = new JPanel(new BorderLayout());
+        chartPanel.setBorder(BorderFactory.createTitledBorder("Kan Şekeri Değerleri"));
 
-        // TODO: Grafik işlevselliği eklenecek
-        JLabel graphPlaceholder = new JLabel("Grafik özelliği yakında eklenecek", JLabel.CENTER);
-        graphPlaceholder.setForeground(Color.GRAY);
-        chartPanel.add(graphPlaceholder, BorderLayout.CENTER);
+        // Grafiğin boyutunu ayarlama
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        int chartHeight = (int)(screenSize.height * 0.4); // Ekran yüksekliğinin %40'ı kadar
+        chartPanel.setPreferredSize(new Dimension(600, chartHeight));
+
+        // Grafiği güncelle
+        updateBloodSugarChart();
 
         panel.add(chartPanel, BorderLayout.CENTER);
 
         return panel;
+    }
+
+    /**
+     * Kan şekeri grafiğini günceller
+     */
+    private void updateBloodSugarChart() {
+        // chartPanel'in içeriğini temizle
+        chartPanel.removeAll();
+
+        try {
+            // Bugünün tarihini al
+            LocalDate today = LocalDate.now();
+
+            // MeasurementDao kullanarak bugünün verilerini al
+            MeasurementDao measurementDao = new MeasurementDao();
+            List<BloodSugarMeasurement> todaysMeasurements = measurementDao.findByDateRange(
+                    patient.getPatient_id(),
+                    today,
+                    today
+            );
+
+            if (todaysMeasurements.isEmpty()) {
+                JLabel noDataLabel = new JLabel("Bugün için kan şekeri ölçümü kaydedilmemiş", JLabel.CENTER);
+                noDataLabel.setFont(new Font("Arial", Font.ITALIC, 14));
+                noDataLabel.setForeground(Color.GRAY);
+                chartPanel.add(noDataLabel, BorderLayout.CENTER);
+            } else {
+                // Ölçümleri saate göre sırala
+                Collections.sort(todaysMeasurements, Comparator.comparing(m -> m.getOlcum_tarihi()));
+
+                // Tek bir seri kullan, tüm noktaları içinde topla
+                XYSeries series = new XYSeries("Kan Şekeri");
+
+                // Periyotları sakla (hangi XY değeri hangi periyoda ait)
+                final Map<Point2D, String> periodMap = new HashMap<>();
+
+                // Tüm ölçümleri tek seride topla
+                for (BloodSugarMeasurement measurement : todaysMeasurements) {
+                    LocalDateTime dateTime = measurement.getOlcum_tarihi();
+                    long seconds = dateTime.getHour() * 3600L + dateTime.getMinute() * 60L;
+                    double value = measurement.getOlcum_degeri();
+
+                    // Veriyi seriye ekle
+                    series.add(seconds, value);
+
+                    // Periyot bilgisini sakla (nokta koordinatlarıyla ilişkilendir)
+                    periodMap.put(new Point2D.Double(seconds, value), measurement.getOlcum_zamani());
+                }
+
+                // Veri setini oluştur
+                XYSeriesCollection dataset = new XYSeriesCollection(series);
+
+                // Grafiği oluştur
+                JFreeChart chart = ChartFactory.createXYLineChart(
+                        "Bugün (" + today.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")",
+                        "Saat",
+                        "Kan Şekeri (mg/dL)",
+                        dataset,
+                        PlotOrientation.VERTICAL,
+                        false,
+                        true,
+                        false
+                );
+
+                // Grafik görünümünü düzenle
+                XYPlot plot = chart.getXYPlot();
+                plot.setBackgroundPaint(Color.WHITE);
+                plot.setDomainGridlinePaint(Color.LIGHT_GRAY);
+                plot.setRangeGridlinePaint(Color.LIGHT_GRAY);
+
+                // X ekseni (saat) formatını ayarla
+                NumberAxis domainAxis = (NumberAxis) plot.getDomainAxis();
+                domainAxis.setNumberFormatOverride(new NumberFormat() {
+                    @Override
+                    public StringBuffer format(double seconds, StringBuffer toAppendTo, FieldPosition pos) {
+                        int hours = (int) (seconds / 3600);
+                        int minutes = (int) ((seconds % 3600) / 60);
+                        return toAppendTo.append(String.format("%02d:%02d", hours, minutes));
+                    }
+
+                    @Override
+                    public StringBuffer format(long number, StringBuffer toAppendTo, FieldPosition pos) {
+                        return format((double) number, toAppendTo, pos);
+                    }
+
+                    @Override
+                    public Number parse(String source, ParsePosition parsePosition) {
+                        return null;
+                    }
+                });
+
+                domainAxis.setRange(0, 24 * 3600);
+                domainAxis.setTickUnit(new NumberTickUnit(2 * 3600));
+
+                // Y ekseni ayarları
+                NumberAxis rangeAxis = (NumberAxis) plot.getRangeAxis();
+                rangeAxis.setRange(30, 250);
+                rangeAxis.setTickUnit(new NumberTickUnit(20));
+
+                // Normal aralık işaretçisi
+                IntervalMarker normalRange = new IntervalMarker(70, 110);
+                normalRange.setPaint(new Color(200, 255, 200, 100));
+                normalRange.setLabel("Normal Aralık (70-110)");
+                normalRange.setLabelFont(new Font("SansSerif", Font.PLAIN, 11));
+                normalRange.setLabelPaint(new Color(0, 120, 0));
+                plot.addRangeMarker(normalRange);
+
+                // Özel Renderer - Periyoda göre farklı renk ama hepsi tek seride
+                XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer() {
+                    @Override
+                    public Paint getItemPaint(int series, int item) {
+                        // Veri noktasının koordinatlarını al
+                        XYDataset dataset = getPlot().getDataset();
+                        double x = dataset.getXValue(series, item);
+                        double y = dataset.getYValue(series, item);
+
+                        // Bu koordinata karşılık gelen periyodu bul
+                        String period = periodMap.get(new Point2D.Double(x, y));
+
+                        // Periyoda göre renk döndür
+                        if (period != null) {
+                            switch (period) {
+                                case "sabah": return new Color(0, 120, 215); // Mavi
+                                case "ogle": return new Color(255, 140, 0);  // Turuncu
+                                case "ikindi": return new Color(50, 150, 50); // Yeşil
+                                case "aksam": return new Color(128, 0, 128); // Mor
+                                case "gece": return new Color(50, 50, 50);   // Siyah
+                            }
+                        }
+                        return super.getItemPaint(series, item);
+                    }
+                };
+
+                // Çizgi ve nokta stilini ayarla
+                renderer.setDefaultShapesVisible(true);
+                renderer.setDefaultShape(new Ellipse2D.Double(-5, -5, 10, 10)); // Büyük noktalar
+                renderer.setDefaultLinesVisible(true); // Çizgileri göster
+                renderer.setDrawOutlines(true);
+                renderer.setUseFillPaint(true);
+                renderer.setDefaultFillPaint(Color.WHITE);
+                renderer.setSeriesStroke(0, new BasicStroke(2.0f)); // Kalın çizgi
+
+                // Renderer'ı ayarla
+                plot.setRenderer(renderer);
+
+                // Tooltip generator
+                renderer.setDefaultToolTipGenerator(new StandardXYToolTipGenerator() {
+                    @Override
+                    public String generateToolTip(XYDataset dataset, int series, int item) {
+                        // Koordinatlar
+                        double x = dataset.getXValue(series, item);
+                        double y = dataset.getYValue(series, item);
+
+                        // Saat formatı
+                        int hours = (int) (x / 3600);
+                        int minutes = (int) ((x % 3600) / 60);
+                        String timeStr = String.format("%02d:%02d", hours, minutes);
+
+                        // Kan şekeri değeri
+                        int bloodSugar = (int) y;
+
+                        // Periyot adını bul
+                        String periodCode = periodMap.get(new Point2D.Double(x, y));
+                        String periodName;
+                        switch (periodCode) {
+                            case "sabah": periodName = "Sabah"; break;
+                            case "ogle": periodName = "Öğle"; break;
+                            case "ikindi": periodName = "İkindi"; break;
+                            case "aksam": periodName = "Akşam"; break;
+                            case "gece": periodName = "Gece"; break;
+                            default: periodName = periodCode; break;
+                        }
+
+                        return String.format("<html>Vakit: <b>%s</b><br>Saat: <b>%s</b><br>Kan Şekeri: <b>%d mg/dL</b></html>",
+                                periodName, timeStr, bloodSugar);
+                    }
+                });
+
+                // Periyot açıklaması için gösterge oluştur
+                LegendTitle legend = new LegendTitle(new LegendItemSource() {
+                    @Override
+                    public LegendItemCollection getLegendItems() {
+                        LegendItemCollection items = new LegendItemCollection();
+                        items.add(new LegendItem("Sabah", new Color(0, 120, 215)));
+                        items.add(new LegendItem("Öğle", new Color(255, 140, 0)));
+                        items.add(new LegendItem("İkindi", new Color(50, 150, 50)));
+                        items.add(new LegendItem("Akşam", new Color(128, 0, 128)));
+                        items.add(new LegendItem("Gece", new Color(50, 50, 50)));
+                        return items;
+                    }
+                });
+                legend.setPosition(RectangleEdge.BOTTOM);
+                chart.addLegend(legend);
+
+                // Grafiği panele ekle
+                ChartPanel jfreeChartPanel = new ChartPanel(chart);
+
+                // Grafik boyutunu ayarla - ekranın önemli bir kısmını kaplasın
+                Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+                int chartHeight = (int)(screenSize.height * 0.4);
+                jfreeChartPanel.setPreferredSize(new Dimension(-1, chartHeight));
+
+                chartPanel.add(jfreeChartPanel, BorderLayout.CENTER);
+
+                // Ortalamayı güncelle
+                try {
+                    double avgValue = measurementDao.getDailyAverage(patient.getPatient_id(), today);
+                    if (avgValue > 0) {
+                        avgValueLabel.setText(String.format("%.1f mg/dL", avgValue));
+
+                        // Değere göre renklendirme
+                        if (avgValue < 70) {
+                            avgValueLabel.setForeground(new Color(220, 0, 0)); // Kırmızı - düşük
+                        } else if (avgValue > 110) {
+                            avgValueLabel.setForeground(new Color(220, 0, 0)); // Kırmızı - yüksek
+                        } else {
+                            avgValueLabel.setForeground(new Color(0, 150, 0)); // Yeşil - normal
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("Ortalama hesaplanırken hata: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            JLabel errorLabel = new JLabel("Grafik yüklenirken hata: " + e.getMessage(), JLabel.CENTER);
+            errorLabel.setFont(new Font("Arial", Font.BOLD, 12));
+            errorLabel.setForeground(Color.RED);
+            chartPanel.add(errorLabel, BorderLayout.CENTER);
+            e.printStackTrace();
+        }
+
+        // Panel güncellendi, yeniden çiz
+        chartPanel.revalidate();
+        chartPanel.repaint();
     }
 
     /**
@@ -442,6 +699,9 @@ public class PatientDashboard extends JPanel {
 
                 // Verileri yenile
                 loadData();
+
+                // Grafiği güncelle
+                updateBloodSugarChart();
             } else {
                 JOptionPane.showMessageDialog(this,
                         "Ölçüm kaydedilirken bir hata oluştu.",
@@ -799,7 +1059,6 @@ public class PatientDashboard extends JPanel {
                 break;
             }
         }
-
         // Verileri yenile
         loadData();
     }
