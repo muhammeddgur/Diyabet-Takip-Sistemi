@@ -48,7 +48,70 @@ public class ExerciseTrackingDao implements IExerciseTrackingDao {
         return list;
     }
 
+    /**
+     * Hasta ID'sine göre egzersiz takip verilerini getirir
+     * @param patientId Hasta ID'si
+     * @return Egzersiz takip verileri listesi
+     * @throws SQLException Veritabanı hatası oluşursa
+     */
+    public List<ExerciseTracking> findAllByPatientId(int patientId) throws SQLException {
+        List<ExerciseTracking> list = new ArrayList<>();
+        String sql = """
+                     SELECT et.*
+                     FROM exercise_tracking et
+                     JOIN patient_exercises pe ON et.patient_exercise_id = pe.patient_exercise_id
+                     WHERE pe.patient_id = ?
+                     ORDER BY et.takip_tarihi DESC
+                     """;
 
+        try (Connection connection = connectionManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setInt(1, patientId);
+            ResultSet rs = statement.executeQuery();
+
+            while (rs.next()) {
+                list.add(mapToExerciseTracking(rs));
+            }
+        }
+
+        return list;
+    }
+
+    /**
+     * Belirtilen hasta ID'si ve tarih aralığına göre egzersiz takip verilerini getirir
+     * @param patientId Hasta ID'si
+     * @param startDate Başlangıç tarihi
+     * @param endDate Bitiş tarihi
+     * @return Egzersiz takip verileri listesi
+     * @throws SQLException Veritabanı hatası oluşursa
+     */
+    public List<ExerciseTracking> findByPatientIdAndDateRange(int patientId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        List<ExerciseTracking> list = new ArrayList<>();
+        String sql = """
+                     SELECT et.*
+                     FROM exercise_tracking et
+                     JOIN patient_exercises pe ON et.patient_exercise_id = pe.patient_exercise_id
+                     WHERE pe.patient_id = ?
+                     AND et.takip_tarihi BETWEEN ? AND ?
+                     ORDER BY et.takip_tarihi DESC
+                     """;
+
+        try (Connection connection = connectionManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setInt(1, patientId);
+            statement.setDate(2, java.sql.Date.valueOf(startDate));
+            statement.setDate(3, java.sql.Date.valueOf(endDate));
+            ResultSet rs = statement.executeQuery();
+
+            while (rs.next()) {
+                list.add(mapToExerciseTracking(rs));
+            }
+        }
+
+        return list;
+    }
 
     @Override
     public boolean save(ExerciseTracking entity) throws SQLException {
@@ -57,7 +120,7 @@ public class ExerciseTrackingDao implements IExerciseTrackingDao {
              PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             ps.setInt(1, entity.getPatient_exercise_id());
-            ps.setDate(2, Date.valueOf(entity.getTakip_tarihi()));
+            ps.setDate(2, java.sql.Date.valueOf(entity.getTakip_tarihi()));
             ps.setBoolean(3, entity.getUygulandi_mi());
 
             int affected = ps.executeUpdate();
@@ -95,8 +158,8 @@ public class ExerciseTrackingDao implements IExerciseTrackingDao {
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setInt(1, patientId);
-            statement.setDate(2, Date.valueOf(startDate));
-            statement.setDate(3, Date.valueOf(endDate));
+            statement.setDate(2, java.sql.Date.valueOf(startDate));
+            statement.setDate(3, java.sql.Date.valueOf(endDate));
 
             ResultSet rs = statement.executeQuery();
 
@@ -129,7 +192,8 @@ public class ExerciseTrackingDao implements IExerciseTrackingDao {
         et.setTracking_id(rs.getInt("tracking_id"));
         et.setPatient_exercise_id(rs.getInt("patient_exercise_id"));
         et.setTakip_tarihi(rs.getDate("takip_tarihi").toLocalDate());
-        et.setUygulandi_mi(rs.getBoolean("uygulandi_mi"));
+        // Türkçe karakter sorununu düzelt: veritabanında uygulandı_mı, Java'da uygulandi_mi
+        et.setUygulandi_mi(rs.getBoolean("uygulandı_mı"));
         return et;
     }
 }

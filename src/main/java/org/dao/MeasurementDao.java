@@ -195,8 +195,10 @@ public class MeasurementDao implements IMeasurementDao {
 
     @Override
     public List<BloodSugarMeasurement> findByDateRange(Integer patientId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        // is_valid_time=true filtresi eklendi
         String sql = "SELECT * FROM blood_sugar_measurements WHERE patient_id = ? " +
-                "AND olcum_tarihi >= ? AND olcum_tarihi < ? ORDER BY olcum_tarihi";
+                "AND olcum_tarihi >= ? AND olcum_tarihi < ? AND is_valid_time = TRUE " +
+                "ORDER BY olcum_tarihi";
         List<BloodSugarMeasurement> measurements = new ArrayList<>();
 
         try (Connection conn = connectionManager.getConnection();
@@ -376,18 +378,6 @@ public class MeasurementDao implements IMeasurementDao {
         }
 
         return measurements;
-    }
-
-    /**
-     * Hastanın en son N adet kan şekeri ölçümünü alır - İlave metot
-     *
-     * @param patientId Hasta ID
-     * @param count Kaç adet ölçüm alınacağı
-     * @return Son ölçümler listesi
-     * @throws SQLException Veritabanı hatası durumunda
-     */
-    public List<BloodSugarMeasurement> findLatestMeasurements(Integer patientId, int count) throws SQLException {
-        return getLastMeasurements(patientId, count);
     }
 
     // ResultSet'ten BloodSugarMeasurement nesnesine dönüştürme yardımcı metodu

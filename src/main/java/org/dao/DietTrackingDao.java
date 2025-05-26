@@ -150,7 +150,7 @@ public class DietTrackingDao implements IDietTrackingDao {
         dt.setTracking_id(rs.getInt("tracking_id"));
         dt.setPatient_diet_id(rs.getInt("patient_diet_id"));
         dt.setTakip_tarihi(rs.getDate("takip_tarihi").toLocalDate());
-        dt.setUygulandi_mi(rs.getBoolean("uygulandi_mi"));
+        dt.setUygulandi_mi(rs.getBoolean("uygulandı_mı"));
         return dt;
     }
 }
