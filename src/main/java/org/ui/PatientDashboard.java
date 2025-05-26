@@ -9,6 +9,7 @@ import org.service.*;
 import org.util.DateTimeUtil;
 import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.geom.Point2D;
@@ -104,7 +105,12 @@ public class PatientDashboard extends JPanel {
         }
 
         // Saat kontrolü ve ölçüm sayısı kontrolünü yap
-        checkTimeAndMeasurements();
+        Timer timer = new Timer(1000, e -> {
+            ((Timer) e.getSource()).stop(); // Timer'ı durdur, tek seferlik çalışsın
+            checkTimeAndMeasurements();
+        });
+        timer.setRepeats(false); // Tek seferlik çalışsın
+        timer.start();
     }
 
     /**
@@ -123,6 +129,15 @@ public class PatientDashboard extends JPanel {
                         patient.getPatient_id(),
                         LocalDate.now()
                 );
+
+                if(validCount < 3) {
+                    JOptionPane.showMessageDialog(this,
+                            "Bugün 3 vakitten daha az kan şekeri ölçümü girdiniz!\n" +
+                                    "Yetersiz veri güvenilir olmayan ortalama hesaplanmasına yol açar.\n" +
+                                    "Lütfen 5 vakit ölçüm yapmaya özen gösteriniz.",
+                            "Uyarı",
+                            JOptionPane.WARNING_MESSAGE);
+                }
 
                 // AlertService ile uyarı oluştur
                 AlertService alertService = new AlertService();
@@ -724,7 +739,43 @@ public class PatientDashboard extends JPanel {
                             JOptionPane.WARNING_MESSAGE);
                     return;
                 }
-            } catch (SQLException e) {
+
+                // 2. Önceki periyotlarda ölçüm var mı kontrolü
+                if (!measurementDao.hasAllPreviousPeriodsMeasured(patient.getPatient_id(), today, dbPeriod)) {
+                    // Periyot sırası ve görüntüleme adları
+                    List<String> periodOrder = List.of("sabah", "ogle", "ikindi", "aksam", "gece");
+                    Map<String, String> periodDisplayNames = new HashMap<>();
+                    periodDisplayNames.put("sabah", "Sabah");
+                    periodDisplayNames.put("ogle", "Öğle");
+                    periodDisplayNames.put("ikindi", "İkindi");
+                    periodDisplayNames.put("aksam", "Akşam");
+                    periodDisplayNames.put("gece", "Gece");
+
+                    // Eksik periyotları belirle
+                    int currentIndex = periodOrder.indexOf(dbPeriod);
+                    StringBuilder missedPeriods = new StringBuilder();
+
+                    for (int i = 0; i < currentIndex; i++) {
+                        String period = periodOrder.get(i);
+
+                        // Bu periyotta ölçüm var mı kontrol et
+                        if (!measurementDao.hasValidMeasurementForPeriodAndDate(patient.getPatient_id(), period, today)) {
+                            if (missedPeriods.length() > 0) {
+                                missedPeriods.append(", ");
+                            }
+                            missedPeriods.append(periodDisplayNames.get(period));
+                        }
+                    }
+
+                    JOptionPane.showMessageDialog(this,
+                            "Şu periyot(lar) için ölçüm yapmamışsınız: " + missedPeriods.toString() + "\n\n" +
+                                    "Doğru bir takip ve ortalama hesabı için ölçümlerinizi periyotları atlamadan yapmanız önemlidir.\n" +
+                                    "Ölçüm kaydedilecek, ancak doktorunuz eksik ölçümleri görecektir.",
+                            "Atlanan Periyot Uyarısı",
+                            JOptionPane.WARNING_MESSAGE);
+                }
+
+                } catch (SQLException e) {
                 JOptionPane.showMessageDialog(this, "Veritabanı kontrol hatası: " + e.getMessage(),
                         "Veritabanı Hatası", JOptionPane.ERROR_MESSAGE);
                 e.printStackTrace();

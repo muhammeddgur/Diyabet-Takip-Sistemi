@@ -60,6 +60,56 @@ public class MeasurementDao implements IMeasurementDao {
         return measurements;
     }
 
+    public boolean hasAllPreviousPeriodsMeasured(Integer patientId, LocalDate date, String currentPeriod) throws SQLException {
+        // Periyot sırası
+        List<String> periodOrder = List.of("sabah", "ogle", "ikindi", "aksam", "gece");
+
+        // Şu anki periyodun indeksini bul
+        int currentIndex = periodOrder.indexOf(currentPeriod.toLowerCase());
+
+        // Eğer sabah periyoduysa veya geçersiz periyotsa kontrol etmeye gerek yok
+        if (currentIndex <= 0) {
+            return true;
+        }
+
+        // Önceki periyotlarda kaç tane ölçüm var?
+        String sql = "SELECT COUNT(DISTINCT olcum_zamani) FROM blood_sugar_measurements " +
+                "WHERE patient_id = ? " +
+                "AND DATE(olcum_tarihi) = ? " +
+                "AND is_valid_time = TRUE " +
+                "AND olcum_zamani IN (";
+
+        // Önceki periyotlar için soru işaretleri ekle (?, ?, ? gibi)
+        List<String> placeHolders = new ArrayList<>();
+        for (int i = 0; i < currentIndex; i++) {
+            placeHolders.add("?");
+        }
+
+        sql += String.join(", ", placeHolders) + ")";
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, patientId);
+            stmt.setDate(2, java.sql.Date.valueOf(date));
+
+            // Önceki periyotları parametre olarak ekle
+            for (int i = 0; i < currentIndex; i++) {
+                stmt.setString(i + 3, periodOrder.get(i));
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    int count = rs.getInt(1);
+                    // Önceki periyot sayısı kadar ölçüm var mı?
+                    return count == currentIndex;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public boolean hasValidMeasurementForPeriodAndDate(Integer patientId, String period, LocalDate date) throws SQLException {
         String sql = "SELECT COUNT(*) FROM blood_sugar_measurements " +
                 "WHERE patient_id = ? " +
@@ -320,6 +370,7 @@ public class MeasurementDao implements IMeasurementDao {
             }
         }
     }
+
     public int getValidMeasurementCountForDate(Integer patientId, LocalDate date) throws SQLException {
         String sql = "SELECT COUNT(*) FROM blood_sugar_measurements " +
                 "WHERE patient_id = ? " +
