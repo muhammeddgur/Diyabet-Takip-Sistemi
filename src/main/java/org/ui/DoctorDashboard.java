@@ -3027,6 +3027,7 @@ public class DoctorDashboard extends JPanel {
                     summary.append(" (NORMAL)");
                 }
             }
+
             summary.append("\n\n");
 
             // Egzersiz verisi olmayan günler - yeni eklendi
