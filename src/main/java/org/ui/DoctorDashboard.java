@@ -1416,8 +1416,8 @@ public class DoctorDashboard extends JPanel {
         JPanel dietExercisePanel = createDietExerciseTrackingPanel();
         patientDetailTabs.addTab("Diyet ve Egzersiz Takibi", dietExercisePanel);
 
-        // Uyarılar sekmesi - Hastaların güne göre uyarıları
-        JPanel alertsPanel = createAlertsPanel();
+        // BURADA DEĞİŞİKLİK YAPILDI - Özel hasta uyarıları panelini kullanıyoruz
+        JPanel alertsPanel = createPatientAlertsPanel(); // createAlertsPanel() yerine
         patientDetailTabs.addTab("Uyarılar", alertsPanel);
 
         panel.add(patientDetailTabs, BorderLayout.CENTER);
@@ -3165,8 +3165,10 @@ public class DoctorDashboard extends JPanel {
     }
 
 
-    // Uyarılar paneli - Hastaların güne göre uyarıları
-    private JPanel createAlertsPanel() {
+    /**
+     * Hasta detay ekranı için özel uyarılar paneli oluşturur
+     */
+    private JPanel createPatientAlertsPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -3176,7 +3178,7 @@ public class DoctorDashboard extends JPanel {
 
         // Uyarı türlerini veritabanından yükle
         DefaultComboBoxModel<String> alertTypeModel = new DefaultComboBoxModel<>();
-        alertTypeModel.addElement("Tüm Uyarılar"); // Her zaman ilk eleman olarak ekleyelim
+        alertTypeModel.addElement("Tüm Uyarılar");
 
         try {
             // Veritabanından uyarı türlerini al
@@ -3191,8 +3193,6 @@ public class DoctorDashboard extends JPanel {
         } catch (SQLException ex) {
             System.err.println("Uyarı türleri yüklenirken hata oluştu: " + ex.getMessage());
             ex.printStackTrace();
-
-            // Hata durumunda manuel ekleme yap
             alertTypeModel.addElement("Kritik (Acil Düşük/Yüksek)");
             alertTypeModel.addElement("Bilgilendirme");
         }
@@ -3208,137 +3208,113 @@ public class DoctorDashboard extends JPanel {
         });
         controlPanel.add(dateRangeCombo);
 
-        // Uyarılar tablosu - Durumu sütunu kaldırıldı
+        // Uyarılar tablosu
         String[] columns = {"Tarih", "Saat", "Uyarı Türü", "Uyarı Mesajı"};
         DefaultTableModel model = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; // Tablo hücrelerinin düzenlenmesini engelle
+                return false;
             }
         };
         JTable alertsTable = new JTable(model);
 
-        // Bilgi etiketi - tablonun altına eklenecek
-        JLabel infoLabel = new JLabel("Seçilen filtrelere uygun uyarı bulunmuyor.", SwingConstants.CENTER);
+        // Bilgi etiketi
+        JLabel infoLabel = new JLabel("Bu hasta için uyarı bulunmuyor.", SwingConstants.CENTER);
         infoLabel.setForeground(Color.GRAY);
-        infoLabel.setVisible(false); // Başlangıçta gizli
+        infoLabel.setVisible(false);
 
-        // Detay panelini burada tanımla (tablo seçim dinleyicileri için gerekli)
+        // Detay paneli
         JTextArea detailArea = new JTextArea(4, 20);
         detailArea.setEditable(false);
         detailArea.setText("Detaylı bilgi görmek için bir uyarı seçin.");
         detailArea.setLineWrap(true);
         detailArea.setWrapStyleWord(true);
 
-        // Tablo seçim olayını dinle
+        // Tablo seçim olayı
         alertsTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && alertsTable.getSelectedRow() != -1) {
-                // Seçilen satırdan mesajı al
                 String alertMessage = (String) alertsTable.getValueAt(alertsTable.getSelectedRow(), 3);
-                // Detay alanına göster
                 detailArea.setText(alertMessage);
             }
         });
 
-        // Uyarıları yenileme butonu - alertsTable tanımlandıktan sonra
+        // Yenile butonu
         JButton refreshAlertsButton = new JButton("Yenile");
         refreshAlertsButton.addActionListener(e -> {
-            // Buton tıklandığında popup göstermek için true parameteresi geçiyoruz
-            refreshAlertsTable(alertTypeCombo, dateRangeCombo, (DefaultTableModel) alertsTable.getModel(),
+            refreshPatientAlertsTable(alertTypeCombo, dateRangeCombo, (DefaultTableModel) alertsTable.getModel(),
                     detailArea, infoLabel, true);
         });
         controlPanel.add(refreshAlertsButton);
 
         panel.add(controlPanel, BorderLayout.NORTH);
 
-        // Tablo ve bilgi etiketini bir container panele ekle
+        // Tablo paneli
         JPanel tableContainer = new JPanel(new BorderLayout());
         JScrollPane scrollPane = new JScrollPane(alertsTable);
         tableContainer.add(scrollPane, BorderLayout.CENTER);
         tableContainer.add(infoLabel, BorderLayout.SOUTH);
-        tableContainer.setBorder(BorderFactory.createTitledBorder("Hasta İçin Oluşturulan Uyarılar"));
+        tableContainer.setBorder(BorderFactory.createTitledBorder("Seçili Hasta İçin Uyarılar"));
 
         panel.add(tableContainer, BorderLayout.CENTER);
 
-        // Uyarı detay paneli
+        // Detay paneli
         JPanel detailPanel = new JPanel(new BorderLayout());
         detailPanel.setBorder(BorderFactory.createTitledBorder("Seçili Uyarı Detayı"));
-
         JScrollPane detailScroll = new JScrollPane(detailArea);
         detailPanel.add(detailScroll, BorderLayout.CENTER);
-
         panel.add(detailPanel, BorderLayout.SOUTH);
 
-        // İlk kez yüklendiğinde varsayılan filtrelerle uyarıları getir - popup gösterme
-        refreshAlertsTable(alertTypeCombo, dateRangeCombo, model, detailArea, infoLabel, false);
+        // Verileri yükle
+        refreshPatientAlertsTable(alertTypeCombo, dateRangeCombo, model, detailArea, infoLabel, false);
 
         return panel;
     }
 
-    /**
-     * Seçilen filtrelere göre uyarı tablosunu yeniler
-     *
-     * @param alertTypeCombo Seçilen uyarı türü
-     * @param dateRangeCombo Seçilen tarih aralığı
-     * @param tableModel Güncellenecek tablo modeli
-     * @param detailArea Detay metin alanı
-     * @param infoLabel Bilgi etiketi
-     * @param showPopup Uyarı bulunamadığında popup gösterilsin mi?
-     */
-    private void refreshAlertsTable(JComboBox<String> alertTypeCombo, JComboBox<String> dateRangeCombo,
-                                    DefaultTableModel tableModel, JTextArea detailArea,
-                                    JLabel infoLabel, boolean showPopup) {
-        // Tablo içeriğini temizle
+    private void refreshPatientAlertsTable(JComboBox<String> alertTypeCombo, JComboBox<String> dateRangeCombo,
+                                           DefaultTableModel tableModel, JTextArea detailArea,
+                                           JLabel infoLabel, boolean showPopup) {
         tableModel.setRowCount(0);
-
-        // Detay alanını sıfırla
         detailArea.setText("Detaylı bilgi görmek için bir uyarı seçin.");
 
         try {
-            // Doktor ID'si - loggedInDoctor yerine mevcut doctorId değişkenini kullan
-            if (doctorId == null) {
-                JOptionPane.showMessageDialog(null,
-                        "Doktor bilgisi bulunamadı. Lütfen tekrar giriş yapın.",
-                        "Oturum Hatası",
-                        JOptionPane.ERROR_MESSAGE);
+            if (selectedPatient == null || selectedPatient.getPatient_id() == null) {
+                infoLabel.setText("Lütfen önce bir hasta seçin");
+                infoLabel.setVisible(true);
                 return;
             }
 
-            // Seçilen filtreler
             String selectedAlertType = (String) alertTypeCombo.getSelectedItem();
             String selectedDateRange = (String) dateRangeCombo.getSelectedItem();
 
-            // AlertDao ve AlertTypeDao oluştur
             AlertDao alertDao = new AlertDao();
             AlertTypeDao alertTypeDao = new AlertTypeDao();
 
-            // Filtreleme koşullarını belirle
-            List<Alert> filteredAlerts = new ArrayList<>();
-            List<Alert> doctorAlerts = alertDao.findByDoctorId(doctorId);
+            // Sadece seçili hastanın uyarılarını al
+            List<Alert> patientAlerts = alertDao.findByPatientId(selectedPatient.getPatient_id());
 
-            // Uyarı türüne göre filtrele
-            if (selectedAlertType.equals("Tüm Uyarılar")) {
-                filteredAlerts = doctorAlerts;
-            } else {
-                // Seçilen uyarı türünün ID'sini bul
+            // Tür filtresi
+            List<Alert> filteredAlerts = new ArrayList<>(patientAlerts);
+            if (selectedAlertType != null && !selectedAlertType.equals("Tüm Uyarılar")) {
                 AlertType selectedType = alertTypeDao.findByName(selectedAlertType);
-
                 if (selectedType != null) {
-                    // Sadece seçilen türdeki uyarıları filtrele
-                    for (Alert alert : doctorAlerts) {
-                        if (alert.getAlertType().getAlert_type_id().equals(selectedType.getAlert_type_id())) {
-                            filteredAlerts.add(alert);
+                    List<Alert> typeFilteredAlerts = new ArrayList<>();
+                    for (Alert alert : filteredAlerts) {
+                        if (alert.getAlertType() != null &&
+                                alert.getAlertType().getAlert_type_id().equals(selectedType.getAlert_type_id())) {
+                            typeFilteredAlerts.add(alert);
                         }
                     }
+                    filteredAlerts = typeFilteredAlerts;
                 }
             }
 
-            // Tarih aralığına göre filtrele
+            // Tarih filtresi
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime startDate;
 
             switch (selectedDateRange) {
                 case "Bugün":
+                    // Günün başlangıcı (00:00:00)
                     startDate = now.toLocalDate().atStartOfDay();
                     break;
                 case "Son 7 Gün":
@@ -3348,24 +3324,25 @@ public class DoctorDashboard extends JPanel {
                     startDate = now.minusDays(30);
                     break;
                 default:
-                    startDate = now.minusYears(1); // Varsayılan olarak son 1 yıl
+                    startDate = now.minusYears(1);
             }
 
-            // Son filtrelemeyi uygula ve tabloya ekle
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
-            DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
-
+            // Son filtreleme
             List<Alert> finalFilteredAlerts = new ArrayList<>();
             for (Alert alert : filteredAlerts) {
-                if (alert.getOlusturma_zamani().isAfter(startDate)) {
+                if (alert.getOlusturma_zamani().isAfter(startDate) ||
+                        alert.getOlusturma_zamani().isEqual(startDate)) {
                     finalFilteredAlerts.add(alert);
                 }
             }
 
-            // Uyarıları tarihe göre sırala (en yeni en üstte)
+            // Tarihe göre sırala (en yeni üstte)
             finalFilteredAlerts.sort((a1, a2) -> a2.getOlusturma_zamani().compareTo(a1.getOlusturma_zamani()));
 
             // Tabloya ekle
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+            DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
             for (Alert alert : finalFilteredAlerts) {
                 tableModel.addRow(new Object[]{
                         alert.getOlusturma_zamani().format(dateFormatter),
@@ -3375,14 +3352,18 @@ public class DoctorDashboard extends JPanel {
                 });
             }
 
-            // Veri yoksa bilgi etiketini göster, varsa gizle
+            // Veri yoksa bilgi etiketi
             boolean hasNoData = tableModel.getRowCount() == 0;
-            infoLabel.setVisible(hasNoData);
+            if (hasNoData) {
+                infoLabel.setText("Bu hasta için uyarı bulunmuyor.");
+                infoLabel.setVisible(true);
+            } else {
+                infoLabel.setVisible(false);
+            }
 
-            // Eğer hiç veri yoksa ve popup gösterilmesi isteniyorsa bilgi mesajı göster
             if (hasNoData && showPopup) {
                 JOptionPane.showMessageDialog(null,
-                        "Seçilen filtrelerle eşleşen uyarı bulunamadı.",
+                        "Bu hasta için seçilen filtrelere uygun uyarı bulunamadı.",
                         "Bilgi",
                         JOptionPane.INFORMATION_MESSAGE);
             }
