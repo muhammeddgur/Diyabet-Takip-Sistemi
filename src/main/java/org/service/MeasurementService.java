@@ -62,7 +62,7 @@ public class MeasurementService {
      * @param measurement Eklenecek ölçüm
      * @return İşlem başarılı ise true, değilse false
      */
-    public boolean addMeasurement(BloodSugarMeasurement measurement) {
+    public boolean addMeasurement(BloodSugarMeasurement measurement,boolean whoAdded) {
         try {
             // Ölçüm zamanını kontrol et
             if (measurement.getOlcum_tarihi() == null) {
@@ -84,7 +84,9 @@ public class MeasurementService {
             // Ölçümü kaydet
             boolean saved = measurementDao.save(measurement);
 
-            if (saved) {
+            //whoAdded = true -> Ölçümü hasta yaptı
+            //whoAdded = false -> Ölçümü doktor yaptı
+            if (saved && whoAdded) {
                 // Ölçüm eşiklerini kontrol et ve gerekli uyarıları oluştur
                 checkMeasurementThresholds(measurement);
 
@@ -290,15 +292,8 @@ public class MeasurementService {
      */
     public void checkMeasurementThresholds(BloodSugarMeasurement measurement) {
         try {
-            // Düşük kan şekeri kontrolü
-            if (measurement.getOlcum_degeri() < 70) {
-                alertService.checkLowBloodSugar(measurement);
-            }
+            alertService.checkBloodSugar(measurement);
 
-            // Yüksek kan şekeri kontrolü
-            if (measurement.getOlcum_degeri() > 200) {
-                alertService.checkHighBloodSugar(measurement);
-            }
         } catch (Exception e) {
             System.err.println("Ölçüm eşikleri kontrol edilirken hata: " + e.getMessage());
             e.printStackTrace();

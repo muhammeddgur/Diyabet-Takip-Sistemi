@@ -70,7 +70,7 @@ public class AlertDao implements IAlertDao {
     public boolean save(Alert alert) throws SQLException {
         if (alert.getAlert_id() == null) {
             // Insert
-            String sql = "INSERT INTO alerts (patient_id, doctor_id, alert_type_id, mesaj, olusturma_zamani, okundu_mu) " +
+            String sql = "INSERT INTO alerts (patient_id, doctor_id, alert_type_id, mesaj, olusturma_zamani) " +
                     "VALUES (?, ?, ?, ?, ?, ?) RETURNING alert_id";
 
             try (Connection conn = connectionManager.getConnection();
@@ -81,7 +81,6 @@ public class AlertDao implements IAlertDao {
                 stmt.setInt(3, alert.getAlertType().getAlert_type_id());
                 stmt.setString(4, alert.getMesaj());
                 stmt.setTimestamp(5, Timestamp.valueOf(alert.getOlusturma_zamani()));
-                stmt.setBoolean(6, alert.getOkundu_mu());
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
@@ -92,8 +91,7 @@ public class AlertDao implements IAlertDao {
             }
         } else {
             // Update
-            String sql = "UPDATE alerts SET patient_id = ?, doctor_id = ?, alert_type_id = ?, mesaj = ?, " +
-                    "okundu_mu = ?, okunma_zamani = ? WHERE alert_id = ?";
+            String sql = "UPDATE alerts SET patient_id = ?, doctor_id = ?, alert_type_id = ?, mesaj = ? WHERE alert_id = ?";
 
             try (Connection conn = connectionManager.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -102,15 +100,8 @@ public class AlertDao implements IAlertDao {
                 stmt.setInt(2, alert.getDoctor().getDoctor_id());
                 stmt.setInt(3, alert.getAlertType().getAlert_type_id());
                 stmt.setString(4, alert.getMesaj());
-                stmt.setBoolean(5, alert.getOkundu_mu());
 
-                if (alert.getOkunma_zamani() != null) {
-                    stmt.setTimestamp(6, Timestamp.valueOf(alert.getOkunma_zamani()));
-                } else {
-                    stmt.setNull(6, Types.TIMESTAMP);
-                }
-
-                stmt.setInt(7, alert.getAlert_id());
+                stmt.setInt(5, alert.getAlert_id());
 
                 int affectedRows = stmt.executeUpdate();
                 return affectedRows > 0;
@@ -223,16 +214,10 @@ public class AlertDao implements IAlertDao {
         Alert alert = new Alert();
         alert.setAlert_id(rs.getInt("alert_id"));
         alert.setMesaj(rs.getString("mesaj"));
-        alert.setOkundu_mu(rs.getBoolean("okundu_mu"));
 
         Timestamp createdAt = rs.getTimestamp("olusturma_zamani");
         if (createdAt != null) {
             alert.setOlusturma_zamani(createdAt.toLocalDateTime());
-        }
-
-        Timestamp readAt = rs.getTimestamp("okunma_zamani");
-        if (readAt != null) {
-            alert.setOkunma_zamani(readAt.toLocalDateTime());
         }
 
         // Hasta bilgisini ekle

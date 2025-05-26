@@ -9,13 +9,10 @@ public class Alert {
     private AlertType alertType;
     private String mesaj;
     private LocalDateTime olusturma_zamani;
-    private Boolean okundu_mu;
-    private LocalDateTime okunma_zamani;
 
     // Constructors
     public Alert() {
         this.olusturma_zamani = LocalDateTime.now();
-        this.okundu_mu = false;
     }
 
     public Alert(Patient patient, Doctor doctor, AlertType alertType, String mesaj) {
@@ -24,7 +21,6 @@ public class Alert {
         this.alertType = alertType;
         this.mesaj = mesaj;
         this.olusturma_zamani = LocalDateTime.now();
-        this.okundu_mu = false;
     }
 
     // Getters and Setters
@@ -76,31 +72,6 @@ public class Alert {
         this.olusturma_zamani = olusturma_zamani;
     }
 
-    public Boolean getOkundu_mu() {
-        return okundu_mu;
-    }
-
-    public void setOkundu_mu(Boolean okundu_mu) {
-        this.okundu_mu = okundu_mu;
-        if (okundu_mu) {
-            this.okunma_zamani = LocalDateTime.now();
-        }
-    }
-
-    public LocalDateTime getOkunma_zamani() {
-        return okunma_zamani;
-    }
-
-    public void setOkunma_zamani(LocalDateTime okunma_zamani) {
-        this.okunma_zamani = okunma_zamani;
-    }
-
-    // Uyarıyı okundu olarak işaretlemek için yardımcı metod
-    public void markAsRead() {
-        this.okundu_mu = true;
-        this.okunma_zamani = LocalDateTime.now();
-    }
-
     @Override
     public String toString() {
         return "Alert{" +
@@ -110,8 +81,6 @@ public class Alert {
                 ", alertType=" + (alertType != null ? alertType.getTip_adi() : "Bilinmeyen") +
                 ", mesaj='" + mesaj + '\'' +
                 ", olusturma_zamani=" + olusturma_zamani +
-                ", okundu_mu=" + okundu_mu +
-                ", okunma_zamani=" + okunma_zamani +
                 '}';
     }
 }

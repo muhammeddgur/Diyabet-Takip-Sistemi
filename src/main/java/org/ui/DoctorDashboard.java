@@ -1043,7 +1043,7 @@ public class DoctorDashboard extends JPanel {
                         measurement.setInsulin_miktari(0.0);
 
                         // Ölçümü veritabanına kaydet
-                        boolean success = measurementService.addMeasurement(measurement);
+                        boolean success = measurementService.addMeasurement(measurement,false);
 
                         if (success) {
                             JOptionPane.showMessageDialog(this,

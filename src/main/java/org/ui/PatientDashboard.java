@@ -707,7 +707,7 @@ public class PatientDashboard extends JPanel {
             measurement.setInsulin_miktari(0.0);
 
             // Service aracılığıyla Dao kullanarak tabloya ekler
-            boolean success = measurementService.addMeasurement(measurement);
+            boolean success = measurementService.addMeasurement(measurement,true);
 
             try {
                 MeasurementDao measurementDao = new MeasurementDao();

@@ -88,71 +88,26 @@ public class AlertService {
     }
 
     /**
-     * Uyarıyı okundu olarak işaretler.
-     *
-     * @param alertId Uyarı ID'si
-     * @return İşlem başarılı ise true, değilse false
-     */
-    public boolean markAlertAsRead(Integer alertId) {
-        try {
-            return alertDao.markAsRead(alertId);
-        } catch (SQLException e) {
-            System.err.println("Uyarı okundu olarak işaretlenirken bir hata oluştu: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Düşük kan şekeri kontrolü yapar.
+     * Kan şekeri kontrolü yapar.
      *
      * @param measurement Kontrol edilecek ölçüm
      */
-    public void checkLowBloodSugar(BloodSugarMeasurement measurement) {
-        try {
-            // Düşük kan şekeri için uyarı tipi bul
-            AlertType alertType = alertTypeDao.findByName("Acil Uyarı");
-
-            if (alertType == null) {
-                System.err.println("Uyarı tipi bulunamadı.");
-                return;
-            }
-
-            // Uyarı oluştur
-            Alert alert = new Alert();
-            alert.setPatient(measurement.getPatient());
-            alert.setDoctor(measurement.getPatient().getDoctor());
-            alert.setAlertType(alertType);
-            alert.setMesaj("Hastanın kan şekeri seviyesi 70 mg/dL altına düştü. " +
-                    "Değer: " + measurement.getOlcum_degeri() + " mg/dL. " +
-                    "Zaman: " + measurement.getOlcum_tarihi());
-
-            // Uyarıyı kaydet
-            createAlert(alert);
-        } catch (SQLException e) {
-            System.err.println("Düşük kan şekeri kontrolü sırasında bir hata oluştu: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Yüksek kan şekeri kontrolü yapar.
-     *
-     * @param measurement Kontrol edilecek ölçüm
-     */
-    public void checkHighBloodSugar(BloodSugarMeasurement measurement) {
+    public void checkBloodSugar(BloodSugarMeasurement measurement) {
         try {
             // Yüksek kan şekeri için uyarı tipi bul
-            AlertType alertType;
+            AlertType alertType = null;
 
-            if (measurement.getOlcum_degeri() > 300) {
+            if (measurement.getOlcum_degeri() > 200) {
                 alertType = alertTypeDao.findByName("Acil Müdahale Uyarısı");
-            } else if (measurement.getOlcum_degeri() > 240) {
+            } else if (measurement.getOlcum_degeri() > 150) {
                 alertType = alertTypeDao.findByName("İzleme Uyarısı");
-            } else {
+            } else if (measurement.getOlcum_degeri() > 110) {
                 alertType = alertTypeDao.findByName("Takip Uyarısı");
+            } else if (measurement.getOlcum_degeri() < 70) {
+                alertType = alertTypeDao.findByName("Acil Uyarı");
             }
 
             if (alertType == null) {
-                System.err.println("Uyarı tipi bulunamadı.");
                 return;
             }
 
@@ -161,14 +116,14 @@ public class AlertService {
             alert.setPatient(measurement.getPatient());
             alert.setDoctor(measurement.getPatient().getDoctor());
             alert.setAlertType(alertType);
-            alert.setMesaj("Hastanın kan şekeri seviyesi yüksek. " +
+            alert.setMesaj(alertType.getAciklama() +
                     "Değer: " + measurement.getOlcum_degeri() + " mg/dL. " +
                     "Zaman: " + measurement.getOlcum_tarihi());
 
             // Uyarıyı kaydet
             createAlert(alert);
         } catch (SQLException e) {
-            System.err.println("Yüksek kan şekeri kontrolü sırasında bir hata oluştu: " + e.getMessage());
+            System.err.println("Kan şekeri kontrolü sırasında bir hata oluştu: " + e.getMessage());
         }
     }
 }
