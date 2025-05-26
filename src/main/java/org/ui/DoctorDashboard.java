@@ -1976,80 +1976,14 @@ public class DoctorDashboard extends JPanel {
 
         // Zaman bazlı analiz için tarih seçici
         final JPanel timeBasedPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        timeBasedPanel.add(new JLabel("Tarih:"));
+        timeBasedPanel.add(new JLabel("Tarih (GG.AA.YYYY):"));
 
         // Format: GG.AA.YYYY
         final JTextField dateField = new JTextField(10);
         dateField.setText(LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
         timeBasedPanel.add(dateField);
 
-        // Tarih seçici butonu - JDateChooser yerine manuel dialog kullanalım
-        JButton datePickerButton = new JButton("...");
-        datePickerButton.setPreferredSize(new Dimension(30, 25));
-        datePickerButton.addActionListener(e -> {
-            // Basit bir tarih seçici dialog göster
-            JDialog dialog = new JDialog((JFrame) SwingUtilities.getWindowAncestor(mainPanel), "Tarih Seç", true);
-
-            // Yıl, ay, gün için spinner'lar
-            JPanel datePanel = new JPanel(new GridLayout(0, 2));
-            datePanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-            // Mevcut tarihi parse et
-            LocalDate currentDate;
-            try {
-                currentDate = LocalDate.parse(dateField.getText(), DateTimeFormatter.ofPattern("dd.MM.yyyy"));
-            } catch (Exception ex) {
-                currentDate = LocalDate.now();
-            }
-
-            // Gün spinner'ı
-            datePanel.add(new JLabel("Gün:"));
-            SpinnerModel dayModel = new SpinnerNumberModel(currentDate.getDayOfMonth(), 1, 31, 1);
-            JSpinner daySpinner = new JSpinner(dayModel);
-            datePanel.add(daySpinner);
-
-            // Ay spinner'ı
-            datePanel.add(new JLabel("Ay:"));
-            SpinnerModel monthModel = new SpinnerNumberModel(currentDate.getMonthValue(), 1, 12, 1);
-            JSpinner monthSpinner = new JSpinner(monthModel);
-            datePanel.add(monthSpinner);
-
-            // Yıl spinner'ı
-            datePanel.add(new JLabel("Yıl:"));
-            SpinnerModel yearModel = new SpinnerNumberModel(currentDate.getYear(), 2000, 2100, 1);
-            JSpinner yearSpinner = new JSpinner(yearModel);
-            datePanel.add(yearSpinner);
-
-            JButton selectButton = new JButton("Seç");
-            selectButton.addActionListener(event -> {
-                try {
-                    int day = (Integer) daySpinner.getValue();
-                    int month = (Integer) monthSpinner.getValue();
-                    int year = (Integer) yearSpinner.getValue();
-
-                    // Tarihi doğrula
-                    LocalDate selectedDate = LocalDate.of(year, month, day);
-                    dateField.setText(selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
-                    dialog.dispose();
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(dialog,
-                            "Geçersiz tarih! Lütfen geçerli bir tarih girin.",
-                            "Hata", JOptionPane.ERROR_MESSAGE);
-                }
-            });
-
-            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-            buttonPanel.add(selectButton);
-
-            dialog.setLayout(new BorderLayout());
-            dialog.add(datePanel, BorderLayout.CENTER);
-            dialog.add(buttonPanel, BorderLayout.SOUTH);
-            dialog.pack();
-            dialog.setLocationRelativeTo(datePickerButton);
-            dialog.setResizable(false);
-            dialog.setVisible(true);
-        });
-        timeBasedPanel.add(datePickerButton);
+        // Date picker butonları kaldırıldı - sadece manuel giriş bırakıldı
         controlPanel.add(timeBasedPanel);
 
         // Analiz türü değiştiğinde ilgili kontrolleri göster/gizle
@@ -2060,27 +1994,22 @@ public class DoctorDashboard extends JPanel {
             timeBasedPanel.setVisible(selectedIndex == 0);
 
             // Kan şekeri - diyet veya egzersiz ilişkisi için tarih aralığı seçiciyi göster
-            if (selectedIndex == 1 || selectedIndex == 2) { // <-- Burada değişiklik yaptım: 1 veya 2 için
+            if (selectedIndex == 1 || selectedIndex == 2) {
                 // Daha önce oluşturulmadıysa tarih aralığı seçici oluştur
                 if (dateRangePanel == null) {
                     dateRangePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
-                    dateRangePanel.add(new JLabel("Başlangıç:"));
+                    dateRangePanel.add(new JLabel("Başlangıç (GG.AA.YYYY):"));
                     startDateField = new JTextField(10);
                     startDateField.setText(LocalDate.now().minusDays(30).format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
                     dateRangePanel.add(startDateField);
 
-                    dateRangePanel.add(new JLabel("Bitiş:"));
+                    dateRangePanel.add(new JLabel("Bitiş (GG.AA.YYYY):"));
                     endDateField = new JTextField(10);
                     endDateField.setText(LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
                     dateRangePanel.add(endDateField);
 
-                    // Tarih seçici butonunu ekle
-                    JButton startDatePickerButton = createDatePickerButton(startDateField);
-                    dateRangePanel.add(startDatePickerButton);
-
-                    JButton endDatePickerButton = createDatePickerButton(endDateField);
-                    dateRangePanel.add(endDatePickerButton);
+                    // Date picker butonları kaldırıldı - sadece manuel giriş bırakıldı
 
                     // Panele ekle
                     controlPanel.add(dateRangePanel);
@@ -2225,81 +2154,6 @@ public class DoctorDashboard extends JPanel {
         mainPanel.add(summaryPanel, BorderLayout.SOUTH);
 
         return mainPanel;
-    }
-
-    /**
-     * Tarih seçici buton oluşturur
-     * @param targetField Seçilen tarihin yazılacağı metin alanı
-     * @return Tarih seçici buton
-     */
-    private JButton createDatePickerButton(JTextField targetField) {
-        JButton datePickerButton = new JButton("...");
-        datePickerButton.setPreferredSize(new Dimension(30, 25));
-        datePickerButton.addActionListener(e -> {
-            // Basit bir tarih seçici dialog göster
-            JDialog dialog = new JDialog((JFrame) SwingUtilities.getWindowAncestor(mainPanel), "Tarih Seç", true);
-
-            // Yıl, ay, gün için spinner'lar
-            JPanel datePanel = new JPanel(new GridLayout(0, 2));
-            datePanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-            // Mevcut tarihi parse et
-            LocalDate currentDate;
-            try {
-                currentDate = LocalDate.parse(targetField.getText(), DateTimeFormatter.ofPattern("dd.MM.yyyy"));
-            } catch (Exception ex) {
-                currentDate = LocalDate.now();
-            }
-
-            // Gün spinner'ı
-            datePanel.add(new JLabel("Gün:"));
-            SpinnerModel dayModel = new SpinnerNumberModel(currentDate.getDayOfMonth(), 1, 31, 1);
-            JSpinner daySpinner = new JSpinner(dayModel);
-            datePanel.add(daySpinner);
-
-            // Ay spinner'ı
-            datePanel.add(new JLabel("Ay:"));
-            SpinnerModel monthModel = new SpinnerNumberModel(currentDate.getMonthValue(), 1, 12, 1);
-            JSpinner monthSpinner = new JSpinner(monthModel);
-            datePanel.add(monthSpinner);
-
-            // Yıl spinner'ı
-            datePanel.add(new JLabel("Yıl:"));
-            SpinnerModel yearModel = new SpinnerNumberModel(currentDate.getYear(), 2000, 2100, 1);
-            JSpinner yearSpinner = new JSpinner(yearModel);
-            datePanel.add(yearSpinner);
-
-            JButton selectButton = new JButton("Seç");
-            selectButton.addActionListener(event -> {
-                try {
-                    int day = (Integer) daySpinner.getValue();
-                    int month = (Integer) monthSpinner.getValue();
-                    int year = (Integer) yearSpinner.getValue();
-
-                    // Tarihi doğrula
-                    LocalDate selectedDate = LocalDate.of(year, month, day);
-                    targetField.setText(selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
-                    dialog.dispose();
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(dialog,
-                            "Geçersiz tarih! Lütfen geçerli bir tarih girin.",
-                            "Hata", JOptionPane.ERROR_MESSAGE);
-                }
-            });
-
-            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-            buttonPanel.add(selectButton);
-
-            dialog.setLayout(new BorderLayout());
-            dialog.add(datePanel, BorderLayout.CENTER);
-            dialog.add(buttonPanel, BorderLayout.SOUTH);
-            dialog.pack();
-            dialog.setLocationRelativeTo(datePickerButton);
-            dialog.setResizable(false);
-            dialog.setVisible(true);
-        });
-
-        return datePickerButton;
     }
 
     /**
@@ -2625,11 +2479,6 @@ public class DoctorDashboard extends JPanel {
         }
     }
 
-    /**
-     * Kan şekeri ve diyet ilişkisi grafiğini günceller
-     * @param chartContainerPanel Grafik paneli
-     * @param summaryArea Özet metin alanı
-     */
     private void updateBloodSugarDietChart(JPanel chartContainerPanel, JTextArea summaryArea, LocalDate startDate, LocalDate endDate) {
         // Mevcut grafiği temizle
         chartContainerPanel.removeAll();
@@ -2661,26 +2510,11 @@ public class DoctorDashboard extends JPanel {
                 if (!tracking.getTakip_tarihi().isBefore(startDate) &&
                         !tracking.getTakip_tarihi().isAfter(endDate)) {
                     dietStatusMap.put(tracking.getTakip_tarihi(), tracking.getUygulandi_mi());
-
-                    // Debug için yazdır
-                    System.out.println("Diyet takip: " + tracking.getTakip_tarihi() + " - " +
-                            (tracking.getUygulandi_mi() ? "Uygulandı" : "Uygulanmadı"));
                 }
             }
 
             // TimeSeriesCollection için veri serileri
             TimeSeries bloodSugarSeries = new TimeSeries("Kan Şekeri");
-
-            // Debug için konsola yazdır
-            System.out.println("Toplam kan şekeri günlük ortalama kaydı sayısı: " + bloodSugarMap.size());
-            for (Map.Entry<LocalDate, Double> entry : bloodSugarMap.entrySet()) {
-                System.out.println("Tarih: " + entry.getKey() + ", Ortalama: " + entry.getValue());
-            }
-
-            System.out.println("Toplam diyet takip kaydı sayısı: " + dietStatusMap.size());
-            for (Map.Entry<LocalDate, Boolean> entry : dietStatusMap.entrySet()) {
-                System.out.println("Tarih: " + entry.getKey() + ", Uygulandı: " + entry.getValue());
-            }
 
             // Her tarih için veriyi ekle
             for (Map.Entry<LocalDate, Double> entry : bloodSugarMap.entrySet()) {
@@ -2744,6 +2578,8 @@ public class DoctorDashboard extends JPanel {
 
                         if (applied != null) {
                             return applied ? new Color(46, 204, 113) : new Color(231, 76, 60); // Yeşil veya Kırmızı
+                        } else {
+                            return new Color(180, 180, 180); // Diyet verisi olmayan günler için gri
                         }
                     }
                     return super.getItemPaint(series, item);
@@ -2771,6 +2607,9 @@ public class DoctorDashboard extends JPanel {
                                 // Diyet uygulanmadı - daire şekli
                                 return new Ellipse2D.Double(-5, -5, 10, 10);
                             }
+                        } else {
+                            // Diyet verisi olmayan günler için kare şekli
+                            return new Rectangle2D.Double(-5, -5, 10, 10);
                         }
                     }
                     return super.getItemShape(series, item);
@@ -2790,7 +2629,7 @@ public class DoctorDashboard extends JPanel {
             dateAxis.setVerticalTickLabels(false);
             dateAxis.setTickMarkPosition(DateTickMarkPosition.MIDDLE);
 
-            // Açıklama ekleme
+            // Açıklama ekleme - Gri kare açıklaması eklendi
             LegendTitle legend = new LegendTitle(new LegendItemSource() {
                 @Override
                 public LegendItemCollection getLegendItems() {
@@ -2799,6 +2638,8 @@ public class DoctorDashboard extends JPanel {
                             new Rectangle2D.Double(-5, -5, 10, 10), new Color(46, 204, 113)));
                     items.add(new LegendItem("Diyet Uygulanmadı", null, null, null,
                             new Ellipse2D.Double(-5, -5, 10, 10), new Color(231, 76, 60)));
+                    items.add(new LegendItem("Diyet Bilgisi Yok", null, null, null,
+                            new Rectangle2D.Double(-5, -5, 10, 10), new Color(180, 180, 180)));
                     return items;
                 }
             });
@@ -2822,9 +2663,9 @@ public class DoctorDashboard extends JPanel {
                     .append(selectedPatient.getAd()).append(" ").append(selectedPatient.getSoyad())
                     .append("\n\n");
 
-            // Diyet uygulandığı ve uygulanmadığı günlerdeki kan şekeri ortalamaları
-            double appliedAvg = 0, notAppliedAvg = 0;
-            int appliedCount = 0, notAppliedCount = 0;
+            // Diyet uygulandığı, uygulanmadığı ve veri olmayan günlerdeki kan şekeri ortalamaları
+            double appliedAvg = 0, notAppliedAvg = 0, noDataAvg = 0;
+            int appliedCount = 0, notAppliedCount = 0, noDataCount = 0;
 
             for (LocalDate date : bloodSugarMap.keySet()) {
                 Boolean applied = dietStatusMap.get(date);
@@ -2836,6 +2677,9 @@ public class DoctorDashboard extends JPanel {
                         notAppliedAvg += bloodSugarMap.get(date);
                         notAppliedCount++;
                     }
+                } else {
+                    noDataAvg += bloodSugarMap.get(date);
+                    noDataCount++;
                 }
             }
 
@@ -2845,13 +2689,13 @@ public class DoctorDashboard extends JPanel {
             if (notAppliedCount > 0) {
                 notAppliedAvg /= notAppliedCount;
             }
-
-            // Grafikteki uyumsuzluk için test - dietStatusMap tüm gerçek kayıt sayısını sayacağız
-            long totalAppliedCount = dietStatusMap.values().stream().filter(val -> val).count();
-            System.out.println("TÜM DİYET UYGULANDIĞI GÜNLER (VERİTABANI): " + totalAppliedCount);
-            System.out.println("GRAFİKTE GÖSTERILEN DİYET UYGULANDIĞI GÜNLER: " + appliedCount);
+            if (noDataCount > 0) {
+                noDataAvg /= noDataCount;
+            }
 
             // Özet raporda gerçek veritabanı sayılarını kullan
+            long totalAppliedCount = dietStatusMap.values().stream().filter(val -> val).count();
+
             summary.append("DİYET UYGULANDIĞI GÜNLERİN SAYISI: ")
                     .append(totalAppliedCount)
                     .append("\n");
@@ -2889,6 +2733,27 @@ public class DoctorDashboard extends JPanel {
                     summary.append(" (NORMAL)");
                 }
             }
+            summary.append("\n\n");
+
+            // Diyet verisi olmayan günler - yeni eklendi
+            summary.append("DİYET BİLGİSİ OLMAYAN GÜNLERİN SAYISI: ")
+                    .append(noDataCount)
+                    .append("\n");
+
+            if (noDataCount > 0) {
+                summary.append("DİYET BİLGİSİ OLMAYAN GÜNLERDEKİ ORTALAMA: ")
+                        .append(String.format("%.1f mg/dL", noDataAvg));
+
+                if (noDataAvg > 0) {
+                    if (noDataAvg < 70) {
+                        summary.append(" (DÜŞÜK)");
+                    } else if (noDataAvg > 110) {
+                        summary.append(" (YÜKSEK)");
+                    } else {
+                        summary.append(" (NORMAL)");
+                    }
+                }
+            }
 
             summaryArea.setText(summary.toString());
             summaryArea.setCaretPosition(0);
@@ -2906,13 +2771,6 @@ public class DoctorDashboard extends JPanel {
         chartContainerPanel.repaint();
     }
 
-    /**
-     * Kan şekeri ve egzersiz ilişkisi grafiğini günceller
-     * @param chartContainerPanel Grafik paneli
-     * @param summaryArea Özet metin alanı
-     * @param startDate Başlangıç tarihi
-     * @param endDate Bitiş tarihi
-     */
     private void updateBloodSugarExerciseChart(JPanel chartContainerPanel, JTextArea summaryArea, LocalDate startDate, LocalDate endDate) {
         // Mevcut grafiği temizle
         chartContainerPanel.removeAll();
@@ -2946,26 +2804,11 @@ public class DoctorDashboard extends JPanel {
                 if (!tracking.getTakip_tarihi().isBefore(startDate) &&
                         !tracking.getTakip_tarihi().isAfter(endDate)) {
                     exerciseStatusMap.put(tracking.getTakip_tarihi(), tracking.getUygulandi_mi());
-
-                    // Debug için yazdır
-                    System.out.println("Egzersiz takip: " + tracking.getTakip_tarihi() + " - " +
-                            (tracking.getUygulandi_mi() ? "Yapıldı" : "Yapılmadı"));
                 }
             }
 
             // TimeSeriesCollection için veri serileri
             TimeSeries bloodSugarSeries = new TimeSeries("Kan Şekeri");
-
-            // Debug için konsola yazdır
-            System.out.println("Toplam kan şekeri günlük ortalama kaydı sayısı: " + bloodSugarMap.size());
-            for (Map.Entry<LocalDate, Double> entry : bloodSugarMap.entrySet()) {
-                System.out.println("Tarih: " + entry.getKey() + ", Ortalama: " + entry.getValue());
-            }
-
-            System.out.println("Toplam egzersiz takip kaydı sayısı: " + exerciseStatusMap.size());
-            for (Map.Entry<LocalDate, Boolean> entry : exerciseStatusMap.entrySet()) {
-                System.out.println("Tarih: " + entry.getKey() + ", Uygulandı: " + entry.getValue());
-            }
 
             // Her tarih için veriyi ekle
             for (Map.Entry<LocalDate, Double> entry : bloodSugarMap.entrySet()) {
@@ -3011,7 +2854,7 @@ public class DoctorDashboard extends JPanel {
             normalRange.setLabelPaint(new Color(0, 120, 0));
             plot.addRangeMarker(normalRange);
 
-            // Özel renderer - yapıldı/yapılmadı durumuna göre nokta renkleri
+// Özel renderer - yapıldı/yapılmadı durumuna göre nokta renkleri
             XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer() {
                 @Override
                 public Paint getItemPaint(int series, int item) {
@@ -3028,7 +2871,9 @@ public class DoctorDashboard extends JPanel {
                         Boolean performed = exerciseStatusMap.get(date);
 
                         if (performed != null) {
-                            return performed ? new Color(65, 105, 225) : new Color(220, 20, 60); // Mavi veya Kırmızı
+                            return performed ? new Color(46, 204, 113) : new Color(231, 76, 60); // Yeşil veya Kırmızı (diyet grafiği ile aynı renk)
+                        } else {
+                            return new Color(180, 180, 180); // Egzersiz verisi olmayan günler için gri (diyet grafiği ile aynı)
                         }
                     }
                     return super.getItemPaint(series, item);
@@ -3050,16 +2895,15 @@ public class DoctorDashboard extends JPanel {
 
                         if (performed != null) {
                             if (performed) {
-                                // Egzersiz yapıldı - üçgen şekli
-                                return new Polygon(
-                                        new int[]{0, -6, 6},
-                                        new int[]{-8, 4, 4},
-                                        3
-                                );
+                                // Egzersiz yapıldı - kare şekli (diyet grafiği ile aynı şekil)
+                                return new Rectangle2D.Double(-5, -5, 10, 10);
                             } else {
-                                // Egzersiz yapılmadı - daire şekli
+                                // Egzersiz yapılmadı - daire şekli (diyet grafiği ile aynı şekil)
                                 return new Ellipse2D.Double(-5, -5, 10, 10);
                             }
+                        } else {
+                            // Egzersiz verisi olmayan günler için kare şekli (diyet grafiği ile aynı)
+                            return new Rectangle2D.Double(-5, -5, 10, 10);
                         }
                     }
                     return super.getItemShape(series, item);
@@ -3079,16 +2923,17 @@ public class DoctorDashboard extends JPanel {
             dateAxis.setVerticalTickLabels(false);
             dateAxis.setTickMarkPosition(DateTickMarkPosition.MIDDLE);
 
-            // Açıklama ekleme
+            // Açıklama ekleme - Diyet grafiği ile aynı sembol ve ifadeler kullanıldı
             LegendTitle legend = new LegendTitle(new LegendItemSource() {
                 @Override
                 public LegendItemCollection getLegendItems() {
                     LegendItemCollection items = new LegendItemCollection();
                     items.add(new LegendItem("Egzersiz Yapıldı", null, null, null,
-                            new Polygon(new int[]{0, -6, 6}, new int[]{-8, 4, 4}, 3),
-                            new Color(65, 105, 225)));
+                            new Rectangle2D.Double(-5, -5, 10, 10), new Color(46, 204, 113))); // Yeşil kare
                     items.add(new LegendItem("Egzersiz Yapılmadı", null, null, null,
-                            new Ellipse2D.Double(-5, -5, 10, 10), new Color(220, 20, 60)));
+                            new Ellipse2D.Double(-5, -5, 10, 10), new Color(231, 76, 60))); // Kırmızı daire
+                    items.add(new LegendItem("Egzersiz Bilgisi Yok", null, null, null,
+                            new Rectangle2D.Double(-5, -5, 10, 10), new Color(180, 180, 180))); // Gri kare
                     return items;
                 }
             });
@@ -3112,9 +2957,9 @@ public class DoctorDashboard extends JPanel {
                     .append(selectedPatient.getAd()).append(" ").append(selectedPatient.getSoyad())
                     .append("\n\n");
 
-            // Egzersiz yapıldığı ve yapılmadığı günlerdeki kan şekeri ortalamaları
-            double performedAvg = 0, notPerformedAvg = 0;
-            int performedCount = 0, notPerformedCount = 0;
+            // Egzersiz yapıldığı, yapılmadığı ve veri olmayan günlerdeki kan şekeri ortalamaları
+            double performedAvg = 0, notPerformedAvg = 0, noDataAvg = 0;
+            int performedCount = 0, notPerformedCount = 0, noDataCount = 0;
 
             for (LocalDate date : bloodSugarMap.keySet()) {
                 Boolean performed = exerciseStatusMap.get(date);
@@ -3126,6 +2971,9 @@ public class DoctorDashboard extends JPanel {
                         notPerformedAvg += bloodSugarMap.get(date);
                         notPerformedCount++;
                     }
+                } else {
+                    noDataAvg += bloodSugarMap.get(date);
+                    noDataCount++;
                 }
             }
 
@@ -3135,13 +2983,13 @@ public class DoctorDashboard extends JPanel {
             if (notPerformedCount > 0) {
                 notPerformedAvg /= notPerformedCount;
             }
-
-            // Grafikteki uyumsuzluk için test - veritabanındaki tüm egzersiz kayıt sayısını say
-            long totalPerformedCount = exerciseStatusMap.values().stream().filter(val -> val).count();
-            System.out.println("TÜM EGZERSİZ YAPILAN GÜNLER (VERİTABANI): " + totalPerformedCount);
-            System.out.println("GRAFİKTE GÖSTERİLEN EGZERSİZ YAPILAN GÜNLER: " + performedCount);
+            if (noDataCount > 0) {
+                noDataAvg /= noDataCount;
+            }
 
             // Özet raporda gerçek veritabanı sayılarını kullan
+            long totalPerformedCount = exerciseStatusMap.values().stream().filter(val -> val).count();
+
             summary.append("EGZERSİZ YAPILDIĞI GÜNLERİN SAYISI: ")
                     .append(totalPerformedCount)
                     .append("\n");
@@ -3177,6 +3025,27 @@ public class DoctorDashboard extends JPanel {
                     summary.append(" (YÜKSEK)");
                 } else {
                     summary.append(" (NORMAL)");
+                }
+            }
+            summary.append("\n\n");
+
+            // Egzersiz verisi olmayan günler - yeni eklendi
+            summary.append("EGZERSİZ BİLGİSİ OLMAYAN GÜNLERİN SAYISI: ")
+                    .append(noDataCount)
+                    .append("\n");
+
+            if (noDataCount > 0) {
+                summary.append("EGZERSİZ BİLGİSİ OLMAYAN GÜNLERDEKİ ORTALAMA: ")
+                        .append(String.format("%.1f mg/dL", noDataAvg));
+
+                if (noDataAvg > 0) {
+                    if (noDataAvg < 70) {
+                        summary.append(" (DÜŞÜK)");
+                    } else if (noDataAvg > 110) {
+                        summary.append(" (YÜKSEK)");
+                    } else {
+                        summary.append(" (NORMAL)");
+                    }
                 }
             }
 
