@@ -561,17 +561,17 @@ public class DoctorDashboard extends JPanel {
 
         mainPanel.add(symptomsPanel);
 
-// 3. BÖLÜM: KAN ŞEKERİ ÖLÇÜM DEĞERLERİ
+        // 3. BÖLÜM: KAN ŞEKERİ ÖLÇÜM DEĞERLERİ
         JPanel bloodSugarPanel = new JPanel(new BorderLayout(5, 5));
         bloodSugarPanel.setBorder(BorderFactory.createTitledBorder("Kan Şekeri Ölçümü"));
 
-// Üst kısmı düzenle - Grid yerine daha esnek bir düzen
+        // Üst kısmı düzenle - Grid yerine daha esnek bir düzen
         JPanel bloodSugarInputPanel = new JPanel(new GridBagLayout());
         GridBagConstraints bloodSugarGbc = new GridBagConstraints();
         bloodSugarGbc.fill = GridBagConstraints.HORIZONTAL;
         bloodSugarGbc.insets = new Insets(5, 5, 5, 5);
 
-// Zaman dilimi seçimi
+        // Zaman dilimi seçimi
         bloodSugarGbc.gridx = 0;
         bloodSugarGbc.gridy = 0;
         bloodSugarInputPanel.add(new JLabel("Zaman Dilimi:"), bloodSugarGbc);
@@ -586,7 +586,7 @@ public class DoctorDashboard extends JPanel {
         });
         bloodSugarInputPanel.add(periodCombo, bloodSugarGbc);
 
-// Ölçüm değeri girişi
+        // Ölçüm değeri girişi
         bloodSugarGbc.gridx = 0;
         bloodSugarGbc.gridy = 1;
         bloodSugarInputPanel.add(new JLabel("Ölçüm Değeri (mg/dL):"), bloodSugarGbc);
@@ -604,10 +604,10 @@ public class DoctorDashboard extends JPanel {
 
         bloodSugarPanel.add(bloodSugarInputPanel, BorderLayout.CENTER);
 
-// Buton Paneli
+        // Buton Paneli
         JPanel bloodSugarButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
 
-// Ölçümü Kaydet butonu
+        // Ölçümü Kaydet butonu
         JButton addMeasurementButton = new JButton("Ölçümü Kaydet");
         addMeasurementButton.addActionListener(e -> {
             String valueStr = measurementValueField.getText().trim();
@@ -1739,7 +1739,7 @@ public class DoctorDashboard extends JPanel {
         return infoPanel;
     }
 
-    // Kan şekeri takip sekmesi - Sadece tablo bölümü
+    // Kan şekeri takip sekmesi - Tüm ölçümleri gösteren panel
     private JPanel createBloodSugarPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -1782,20 +1782,51 @@ public class DoctorDashboard extends JPanel {
         });
 
         JButton updateButton = new JButton("Güncelle");
-
         controlPanel.add(updateButton);
 
         panel.add(controlPanel, BorderLayout.NORTH);
 
-        // Ölçüm verileri tablosu - "Durum" sütunu kaldırıldı
-        String[] columnNames = {"Tarih", "Saat", "Ölçüm Değeri (mg/dL)", "Kategori"};
+        // Ölçüm verileri tablosu - "Geçerlilik" sütunu eklendi
+        String[] columnNames = {"Tarih", "Saat", "Ölçüm Değeri (mg/dL)", "Kategori", "Geçerlilik"};
         DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false; // Tabloyu salt okunur yap
             }
+
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 4) { // Geçerlilik sütunu için Boolean
+                    return Boolean.class;
+                }
+                return super.getColumnClass(columnIndex);
+            }
         };
+
         JTable measurementsTable = new JTable(model);
+
+        // Geçerlilik sütunu için özel bir renderer
+        measurementsTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
+
+                if (value != null) {
+                    boolean isValid = (boolean) value;
+                    if (isValid) {
+                        setText("Geçerli Ölçüm");
+                        setForeground(new Color(0, 128, 0)); // Koyu yeşil
+                    } else {
+                        setText("Geçersiz Ölçüm");
+                        setForeground(Color.RED);
+                    }
+                }
+                return c;
+            }
+        });
+
         JScrollPane scrollPane = new JScrollPane(measurementsTable);
         scrollPane.setBorder(BorderFactory.createTitledBorder("Kan Şekeri Ölçümleri"));
 
@@ -1848,20 +1879,20 @@ public class DoctorDashboard extends JPanel {
                 // Tabloyu temizle
                 model.setRowCount(0);
 
-                // Verileri çek ve tabloyu doldur
+                // Yeni metodu kullan - tüm ölçümleri getir (geçerli ve geçersiz)
                 MeasurementDao measurementDao = new MeasurementDao();
-                List<BloodSugarMeasurement> measurements = measurementDao.findByDateRange(
+                List<BloodSugarMeasurement> measurements = measurementDao.findAllByDateRange(
                         selectedPatient.getPatient_id(),
                         startDate,
                         endDate
                 );
 
-                // Verileri tabloya ekle - "Durum" sütunu çıkarıldı
+                // Verileri tabloya ekle - Geçerlilik sütunuyla birlikte
                 DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
                 DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
                 for (BloodSugarMeasurement measurement : measurements) {
-                    Object[] row = new Object[4]; // 4 sütun
+                    Object[] row = new Object[5]; // 5 sütun
                     row[0] = measurement.getOlcum_tarihi().toLocalDate().format(dateFormatter);
                     row[1] = measurement.getOlcum_tarihi().format(timeFormatter);
                     row[2] = measurement.getOlcum_degeri();
@@ -1880,7 +1911,8 @@ public class DoctorDashboard extends JPanel {
                     }
                     row[3] = category;
 
-                    // "Durum" sütunu kaldırıldı
+                    // Geçerlilik sütunu
+                    row[4] = measurement.getIs_valid_time(); // Boolean değer
 
                     model.addRow(row);
                 }
@@ -3376,7 +3408,6 @@ public class DoctorDashboard extends JPanel {
             ex.printStackTrace();
         }
     }
-
 
 
     /**

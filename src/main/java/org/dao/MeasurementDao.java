@@ -221,6 +221,42 @@ public class MeasurementDao implements IMeasurementDao {
         return measurements;
     }
 
+    /**
+     * Tüm ölçümleri (geçerli ve geçersiz) tarih aralığına göre getirir
+     * @param patientId Hasta ID
+     * @param startDate Başlangıç tarihi
+     * @param endDate Bitiş tarihi
+     * @return Tarih aralığındaki tüm ölçümler
+     * @throws SQLException
+     */
+    public List<BloodSugarMeasurement> findAllByDateRange(Integer patientId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        // is_valid_time filtresi olmadan tüm ölçümleri getir
+        String sql = "SELECT * FROM blood_sugar_measurements WHERE patient_id = ? " +
+                "AND olcum_tarihi >= ? AND olcum_tarihi < ? " +
+                "ORDER BY olcum_tarihi DESC";
+
+        List<BloodSugarMeasurement> measurements = new ArrayList<>();
+
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, patientId);
+            stmt.setTimestamp(2, Timestamp.valueOf(startDate.atStartOfDay()));
+            stmt.setTimestamp(3, Timestamp.valueOf(endDate.plusDays(1).atStartOfDay()));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    BloodSugarMeasurement measurement = mapResultSetToMeasurement(rs);
+                    if (measurement != null) {
+                        measurements.add(measurement);
+                    }
+                }
+            }
+        }
+
+        return measurements;
+    }
+
     @Override
     public List<BloodSugarMeasurement> findByPeriod(Integer patientId, String period) throws SQLException {
         String sql = "SELECT * FROM blood_sugar_measurements WHERE patient_id = ? AND olcum_zamani = ? ORDER BY olcum_tarihi DESC";
