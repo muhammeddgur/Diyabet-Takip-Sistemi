@@ -7,6 +7,7 @@ import org.dao.IAlertTypeDao;
 import org.model.Alert;
 import org.model.AlertType;
 import org.model.BloodSugarMeasurement;
+import org.model.Patient;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
@@ -124,6 +125,35 @@ public class AlertService {
             createAlert(alert);
         } catch (SQLException e) {
             System.err.println("Kan şekeri kontrolü sırasında bir hata oluştu: " + e.getMessage());
+        }
+    }
+
+    public void checkMeasurementCount(int count, Patient patient){
+        try {
+            // Yüksek kan şekeri için uyarı tipi bul
+            AlertType alertType = null;
+
+            if (count == 0) {
+                alertType = alertTypeDao.findByName("Ölçüm Eksik Uyarısı");
+            } else if (count < 3) {
+                alertType = alertTypeDao.findByName("Ölçüm yetersiz Uyarısı");
+            }
+
+            if (alertType == null) {
+                return;
+            }
+
+            // Uyarı oluştur
+            Alert alert = new Alert();
+            alert.setPatient(patient);
+            alert.setDoctor(patient.getDoctor());
+            alert.setAlertType(alertType);
+            alert.setMesaj(alertType.getAciklama());
+
+            // Uyarıyı kaydet
+            createAlert(alert);
+        } catch (SQLException e) {
+            System.err.println("Kan şekeri ölçüm sayısı hesaplanırken bir hata oluştu: " + e.getMessage());
         }
     }
 }

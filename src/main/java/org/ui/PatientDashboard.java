@@ -17,6 +17,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -100,6 +101,39 @@ public class PatientDashboard extends JPanel {
             loadData(); // Verileri yükle
         } catch (Exception e) {
             System.err.println("Veri yükleme hatası: " + e.getMessage());
+        }
+
+        // Saat kontrolü ve ölçüm sayısı kontrolünü yap
+        checkTimeAndMeasurements();
+    }
+
+    /**
+     * Saati kontrol eder ve gerekirse ölçüm sayısı uyarısı oluşturur
+     */
+    private void checkTimeAndMeasurements() {
+        // Şu anki saati al
+        LocalTime now = LocalTime.now();
+
+        // Saat 23:00-00:00 arasında mı kontrolü
+        if (now.getHour() == 23) {
+            try {
+                // MeasurementDao aracılığıyla bugünkü geçerli ölçüm sayısını al
+                MeasurementDao measurementDao = new MeasurementDao();
+                int validCount = measurementDao.getValidMeasurementCountForDate(
+                        patient.getPatient_id(),
+                        LocalDate.now()
+                );
+
+                // AlertService ile uyarı oluştur
+                AlertService alertService = new AlertService();
+                alertService.checkMeasurementCount(validCount, patient);
+
+                System.out.println("Günlük geçerli ölçüm sayısı kontrolü yapıldı. Sayı: " + validCount);
+
+            } catch (SQLException e) {
+                System.err.println("Ölçüm sayısı kontrolü yapılırken hata: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
 

@@ -284,20 +284,25 @@ public class MeasurementDao implements IMeasurementDao {
             }
         }
     }
-    public void updateFlag(Integer measurementId) throws SQLException {
-        String sql = "UPDATE blood_sugar_measurements SET is_valid_time = ? WHERE measurement_id = ?";
+    public int getValidMeasurementCountForDate(Integer patientId, LocalDate date) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM blood_sugar_measurements " +
+                "WHERE patient_id = ? " +
+                "AND DATE(olcum_tarihi) = ? " +
+                "AND is_valid_time = TRUE";
 
         try (Connection conn = connectionManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setBoolean(1, true);
-            stmt.setInt(2, measurementId);
+            stmt.setInt(1, patientId);
+            stmt.setDate(2, java.sql.Date.valueOf(date));
 
-            int affectedRows = stmt.executeUpdate();
-            if (affectedRows == 0) {
-                throw new SQLException("Ölçüm güncellenemedi, böyle bir ID bulunamadı: " + measurementId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
             }
         }
+        return 0;
     }
 
     @Override

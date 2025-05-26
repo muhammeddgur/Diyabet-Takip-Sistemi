@@ -30,10 +30,6 @@ public class Main {
             // Look and Feel ayarla
             setLookAndFeel();
 
-            // Veritabanı bağlantısını başlat
-            DatabaseConnectionManager dbManager = DatabaseConnectionManager.getInstance();
-            System.out.println("Veritabanı bağlantısı kuruldu.");
-
             // Servisleri başlat
             AuthenticationService authService = new AuthenticationService();
             PatientService patientService = new PatientService();

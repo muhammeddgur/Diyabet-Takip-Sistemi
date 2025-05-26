@@ -71,7 +71,7 @@ public class AlertDao implements IAlertDao {
         if (alert.getAlert_id() == null) {
             // Insert
             String sql = "INSERT INTO alerts (patient_id, doctor_id, alert_type_id, mesaj, olusturma_zamani) " +
-                    "VALUES (?, ?, ?, ?, ?, ?) RETURNING alert_id";
+                    "VALUES (?, ?, ?, ?, ?) RETURNING alert_id";
 
             try (Connection conn = connectionManager.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
